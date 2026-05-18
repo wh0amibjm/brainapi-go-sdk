@@ -93,6 +93,7 @@ func newRootCmd() *cobra.Command {
 		newRegisterCmd(),
 		newEmailCmd(),
 		newPasswordCmd(),
+		newDescribeCmd(),
 		newVersionCmd(),
 	)
 	return root
