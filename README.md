@@ -86,34 +86,48 @@ func main() {
 }
 ```
 
+## Integrating from another language
+
+If you're calling `brainapi` as a subprocess from Node / Python / shell rather
+than embedding `pkg/brainapi` in a Go program, read
+[**`docs/sdk-protocol.md`**](docs/sdk-protocol.md) first. It defines the
+stable JSON envelope, the exit-code → `error.kind` map, the stdin / `--decode`
+conventions, and the non-obvious schema traps (`activities.current` is
+month-to-date not today; BRAIN day rolls at 3 AM ET; etc.).
+
+`the TypeScript client/clients/typescript` is the reference TypeScript wrapper —
+copy its envelope parser, typed-exception hierarchy, and execa plumbing.
+
 ## Endpoint coverage
 
-Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CLI subcommand.
+Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CLI subcommand. The **Example** column links to the canonical response fixture in `testdata/` — wrappers can use these to bootstrap typed models without reading Go source.
 
-| Endpoint | Library method | CLI command |
-|---|---|---|
-| `POST /authentication` | `Client.Login` | `auth login` |
-| `GET /authentication` | `Client.Probe` | `auth probe` |
-| `DELETE /authentication` | `Client.Logout` | `auth logout` |
-| `POST /authentication/persona` | `Client.CompletePersona` | _(dead-code safety net)_ |
-| `GET /alphas/{id}` | `Client.GetAlpha` | `alphas get` |
-| `GET /alphas/{id}/check` | `Client.CheckAlpha` | `alphas check` |
-| `POST + GET /alphas/{id}/submit` | `Client.SubmitAlpha` | `alphas submit` |
-| `GET /alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` | `alphas pnl` |
-| `GET /users/self/alphas` | `Client.ListAlphas` / `ListAlphasAll` | `alphas list [--all]` |
-| `POST /simulations` | `Client.CreateSimulation` | `simulations create` |
-| `GET /simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` | `simulations get` / `wait` |
-| `GET /users/self` | `Client.Self` | `users self` |
-| `GET /users/self/competitions` | `Client.Competitions` | `users competitions` |
-| `GET /users/self/activities/{kind}` | `Client.Activities` + `DecodeActivities` | `users activities` |
-| `GET /operators` | `Client.Operators` | `schema operators` |
-| `GET /data-fields` | `Client.DataFields` / `DataFieldsAll` | `schema data-fields [--all]` |
-| `POST /users` | `Client.Register` | `register` |
-| `POST /user/email/reverify` | `Client.ReverifyEmail` | `email reverify` |
-| `POST /user/email/verify` | `Client.VerifyEmail` | `email verify` |
-| `POST /user/password/forgot` | `Client.ForgotPassword` | `password forgot` |
-| `POST /user/password/reset` | `Client.ResetPassword` | `password reset` |
-| `GET /captcha` | `Client.FetchCaptchaChallenge` | _(used internally by Register)_ |
+| Endpoint | Library method | CLI command | Example |
+|---|---|---|---|
+| `POST /authentication` | `Client.Login` | `auth login` | [201 normal](testdata/auth_login_201_normal.json) / [persona](testdata/auth_login_201_persona.json) / [401 invalid](testdata/auth_401_invalid.json) |
+| `GET /authentication` | `Client.Probe` | `auth probe` | [secondary account](testdata/auth_get_secondary.json) / [401 no-creds](testdata/auth_401_no_creds.json) |
+| `DELETE /authentication` | `Client.Logout` | `auth logout` | _(204, no body)_ |
+| `POST /authentication/persona` | `Client.CompletePersona` | _(dead-code safety net)_ | — |
+| `GET /alphas/{id}` | `Client.GetAlpha` | `alphas get` | [alpha](testdata/alpha_detail.json) |
+| `GET /alphas/{id}/check` | `Client.CheckAlpha` | `alphas check` | [terminal](testdata/check_alpha_terminal.json) |
+| `POST + GET /alphas/{id}/submit` | `Client.SubmitAlpha` | `alphas submit` | [200 pending](testdata/submit_200_pending.json) / [403 corr-fail](testdata/submit_403_corr_fail.json) |
+| `GET /alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` | `alphas pnl` | [pnl](testdata/recordsets_pnl.json) |
+| `GET /users/self/alphas` | `Client.ListAlphas` / `ListAlphasAll` | `alphas list [--all]` | [page](testdata/users_alphas_page.json) |
+| `POST /simulations` | `Client.CreateSimulation` | `simulations create` | _(returns 201 with `Location` header only)_ |
+| `GET /simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` | `simulations get` / `wait` | [in-progress](testdata/simulation_in_progress.json) / [complete](testdata/simulation_complete.json) |
+| `GET /users/self` | `Client.Self` | `users self` | [self](testdata/users_self.json) |
+| `GET /users/self/competitions` | `Client.Competitions` | `users competitions` | [competitions](testdata/competitions.json) |
+| `GET /users/self/activities/{kind}` | `Client.Activities` + `DecodeActivities` | `users activities` | [simulations (DAILY)](testdata/activities_simulations.json) / [other-payment empty (LIST)](testdata/activities_other_payment_empty.json) |
+| `GET /operators` | `Client.Operators` | `schema operators` | [operators](testdata/operators.json) |
+| `GET /data-fields` | `Client.DataFields` / `DataFieldsAll` | `schema data-fields [--all]` | [page](testdata/data_fields_page.json) |
+| `POST /users` | `Client.Register` | `register` | _(register success path varies — see captcha leg)_ |
+| `POST /user/email/reverify` | `Client.ReverifyEmail` | `email reverify` | _(2xx status, body shape unstable)_ |
+| `POST /user/email/verify` | `Client.VerifyEmail` | `email verify` | _(2xx status, body shape unstable)_ |
+| `POST /user/password/forgot` | `Client.ForgotPassword` | `password forgot` | _(2xx status, body shape unstable)_ |
+| `POST /user/password/reset` | `Client.ResetPassword` | `password reset` | _(2xx status, body shape unstable)_ |
+| `GET /captcha` | `Client.FetchCaptchaChallenge` | _(used internally by Register)_ | [challenge](testdata/captcha_challenge.json) |
+
+Generic error-envelope examples: [DRF 400](testdata/drf_validation_400.json) for `kind=drf_validation` shape.
 
 ## Configuration
 
