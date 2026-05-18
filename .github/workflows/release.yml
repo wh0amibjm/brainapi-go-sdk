@@ -1,0 +1,53 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: build cross-platform binaries
+        run: |
+          mkdir -p bin
+          VERSION="${GITHUB_REF#refs/tags/}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w \
+            -X github.com/wh0amibjm/brainapi-go-sdk/internal/version.Version=${VERSION} \
+            -X github.com/wh0amibjm/brainapi-go-sdk/internal/version.Commit=${COMMIT} \
+            -X github.com/wh0amibjm/brainapi-go-sdk/internal/version.Date=${DATE}"
+          for target in \
+              linux/amd64 linux/arm64 \
+              darwin/amd64 darwin/arm64 \
+              windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            out="brainapi-${VERSION}-${os}-${arch}${ext}"
+            GOOS=$os GOARCH=$arch CGO_ENABLED=0 \
+              go build -trimpath -ldflags="$LDFLAGS" -o "bin/$out" ./cmd/brainapi
+          done
+          (cd bin && sha256sum * > SHA256SUMS.txt)
+          ls -lh bin/
+
+      - name: create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*
+          generate_release_notes: true

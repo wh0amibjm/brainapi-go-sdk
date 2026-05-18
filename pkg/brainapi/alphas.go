@@ -1,7 +1,6 @@
 package brainapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -338,6 +337,3 @@ func (c *Client) AlphaCheckBody(ctx context.Context, id string) (bool, []string,
 	}
 	return len(fails) == 0, fails, nil
 }
-
-// nopUseBytes silences a vet check when this file is the only one importing bytes.
-var _ = bytes.MinRead

@@ -74,6 +74,10 @@ type Options struct {
 	// Logger is the slog target. Default: slog.Default().
 	Logger *slog.Logger
 
+	// Observer is the instrumentation hook. Default: no-op. Wire to
+	// Prometheus / OTel by implementing the Observer interface.
+	Observer Observer
+
 	// CaptchaSolver is used by Register. Default: pkg/captcha/altcha solver
 	// (wired by SetDefaultAltchaSolver in init).
 	CaptchaSolver CaptchaSolver
@@ -100,6 +104,7 @@ type Client struct {
 	banThreshold      int
 	dailyBudget       DailyBudget
 	logger            *slog.Logger
+	observer          Observer
 	captchaSolver     CaptchaSolver
 
 	credMu   sync.RWMutex
@@ -153,6 +158,9 @@ func NewClient(opts Options) (*Client, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	if opts.Observer == nil {
+		opts.Observer = noopObserver{}
+	}
 	if opts.CaptchaSolver == nil {
 		opts.CaptchaSolver = defaultCaptchaSolver()
 	}
@@ -169,6 +177,7 @@ func NewClient(opts Options) (*Client, error) {
 		banThreshold:      opts.BanThreshold,
 		dailyBudget:       opts.DailyBudget,
 		logger:            opts.Logger,
+		observer:          opts.Observer,
 		captchaSolver:     opts.CaptchaSolver,
 		email:             opts.Email,
 		password:          opts.Password,

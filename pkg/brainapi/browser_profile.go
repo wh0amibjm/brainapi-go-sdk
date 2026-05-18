@@ -32,13 +32,26 @@ const DefaultProfile = ProfileChrome131
 
 // subProfiles is the deterministic-rotation pool for secondary accounts. Keeping
 // it stable means MD5(email) -> profile mapping doesn't drift between SDK
-// releases.
+// releases. Order is load-bearing — DO NOT reorder without versioning.
 var subProfiles = []BrowserProfile{
 	ProfileChrome131,
 	ProfileChrome133,
 	ProfileChrome144,
 	ProfileSafariIOS,
 	ProfileFirefox132,
+}
+
+// allProfiles is every profile name accepted by ParseProfile. Wider than
+// subProfiles, which is only the deterministic-rotation pool.
+var allProfiles = []BrowserProfile{
+	ProfileChrome131,
+	ProfileChrome133,
+	ProfileChrome144,
+	ProfileChrome146,
+	ProfileSafari16,
+	ProfileSafariIOS,
+	ProfileFirefox132,
+	ProfileFirefox147,
 }
 
 // ProfileForEmail picks a profile deterministically from an email address by
@@ -79,7 +92,7 @@ func tlsClientProfile(p BrowserProfile) profiles.ClientProfile {
 	}
 }
 
-// ParseProfile resolves a user-facing string ("chrome131" / "safari17" /
+// ParseProfile resolves a user-facing string ("chrome131" / "safari-ios" /
 // "auto:user@x.com") into a BrowserProfile. Unknown strings fall back to
 // DefaultProfile.
 func ParseProfile(s string) BrowserProfile {
@@ -87,13 +100,10 @@ func ParseProfile(s string) BrowserProfile {
 	if strings.HasPrefix(s, "auto:") {
 		return ProfileForEmail(strings.TrimPrefix(s, "auto:"))
 	}
-	for _, p := range subProfiles {
+	for _, p := range allProfiles {
 		if string(p) == s {
 			return p
 		}
-	}
-	if s == "" {
-		return DefaultProfile
 	}
 	return DefaultProfile
 }

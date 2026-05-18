@@ -1,0 +1,120 @@
+# BRAIN protocol notes
+
+These are the BRAIN HTTP behaviors that the SDK's transport / parsers depend on. They are mirrored — not authored — from the Chrome-verified specs at the reference project. If anything here disagrees with that upstream, **upstream wins**.
+
+Source of truth: `the protocol captures under testdata/` (13 spec files, Chrome-DevTools-verified against `platform.worldquantbrain.com`, 106 spec tests passing as of 2026-05-06).
+
+## Endpoints used
+
+| Method | Path | SDK method |
+|---|---|---|
+| POST | `/authentication` | `Client.Login` |
+| GET | `/authentication` | `Client.Probe` |
+| DELETE | `/authentication` | `Client.Logout` |
+| POST | `/authentication/persona` | `Client.CompletePersona` (dead-code safety net) |
+| POST | `/users` | `Client.Register` |
+| POST | `/user/email/reverify` | `Client.ReverifyEmail` |
+| POST | `/user/email/verify` | `Client.VerifyEmail` |
+| POST | `/user/password/forgot` | `Client.ForgotPassword` |
+| POST | `/user/password/reset` | `Client.ResetPassword` |
+| GET | `/captcha` | `Client.FetchCaptchaChallenge` |
+| GET | `/users/self` | `Client.Self` |
+| GET | `/users/self/competitions` | `Client.Competitions` |
+| GET | `/users/self/alphas` | `Client.ListAlphas` / `ListAlphasAll` |
+| GET | `/users/self/activities/{kind}` | `Client.Activities` |
+| GET | `/alphas/{id}` | `Client.GetAlpha` |
+| GET | `/alphas/{id}/check` | `Client.CheckAlpha` |
+| POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
+| GET | `/alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` |
+| POST | `/simulations` | `Client.CreateSimulation` |
+| GET | `/simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` |
+| GET | `/operators` | `Client.Operators` |
+| GET | `/data-fields` | `Client.DataFields` / `DataFieldsAll` |
+
+## Critical caveats baked into the SDK
+
+### `Retry-After` is a **float** string
+
+BRAIN sends `"5.0"`, not `"5"`. `strconv.Atoi` errors out and drops the hint silently if you use it. The SDK uses `strconv.ParseFloat` and clamps the result to:
+
+| Class | Floor | Ceiling |
+|---|---|---|
+| 429 rate-limit | 1s | 120s |
+| 503 long-poll | 0.5s | 30s |
+| 5xx server error backoff | 5s | 15s |
+| Network error backoff | 2s | 15s |
+
+### SELF_CORRELATION verdict lives ONLY in `/alphas/{id}/submit`
+
+`GET /alphas/{id}` returns `result: "PENDING"` indefinitely for UNSUBMITTED alphas. The verdict only appears via the POST + GET long-poll on `/alphas/{id}/submit`. The reference project had a year-long bug where `CorrPollLane` polled the wrong endpoint and silently dropped verdicts — caught 2026-05-05 during the spec audit.
+
+`Client.SubmitAlpha` does the POST, parses status (200/201/403/503/empty-body), and long-polls GET on the same path until terminal.
+
+### `POST /alphas/{id}/check` is **dead** (returns 405)
+
+Migrated to GET-only some time before 2026-05-05. The TS code silently swallowed the 405 in an except branch and `/check` had been a no-op for months. The SDK uses GET only.
+
+### `POST /alphas/{id}/submit` returns 503 to mean "queued"
+
+503 here is **not** an error. It's BRAIN's "I've queued your submit, please poll the same URL with GET" signal. The SDK treats POST 503 as a terminal success (with empty body) and immediately starts the GET polling loop.
+
+### `/users/self/activities/{kind}` records are positional tuples
+
+The `records.records` array is `[][col0, col1, col2]`, NOT `[]{col0: ..., col1: ...}`. Field names live in `records.schema.properties[*].name`. The SDK exposes `DecodeActivities()` which converts to `map[string]json.RawMessage` keyed by column name.
+
+There are two envelope types:
+
+- `"DAILY"`: includes `yesterday`, `current`, `previous`, `ytd`, `total` summary blocks (used by base-payment, simulations, submissions).
+- `"LIST"`: only `total`; records can have heterogeneous types (used by other-payment).
+
+### Schema endpoint shapes diverge
+
+- `GET /operators` → bare JSON array (no envelope).
+- `GET /data-fields` → `{count, results}` (no `next`/`previous`).
+- `GET /users/self/alphas` → full Django REST `{count, next, previous, results}`.
+
+The SDK uses three different decoded types: `[]Operator`, `DataFieldsPage`, `Page[Alpha]`.
+
+### DRF validation envelope on 400
+
+All `/users/*` and `/user/*` 400 responses use:
+
+```json
+{"<field>": ["<error message>", ...], ...}
+```
+
+Locale-aware — strings come back in the locale of the calling session (often zh-CN). The SDK exposes this as `DRFError` with `Fields map[string][]string`. **Match on field names, never error strings.**
+
+### Altcha PoW captcha (mandatory for `POST /users`)
+
+BRAIN migrated off reCAPTCHA v2 to Altcha-style SHA-256 PoW some time before 2026-05-17.
+
+```
+GET /captcha
+  -> {algorithm: "SHA-256", challenge: <hex>, salt: <str>, signature: <str>, maxNumber: <int>}
+
+# Find n in [0, maxNumber] s.t. hex(sha256(salt + str(n))) == challenge
+# Payload = base64(JSON({...challenge, number: n, took: <ms>}))
+# Inject into auxiliary.captcha on POST /users.
+```
+
+The SDK includes a parallel SHA-256 solver (`pkg/captcha/altcha`) wired by default. Median solve at `maxNumber=1_000_000` on an 8-core machine: ~10 ms parallel, ~250 ms single-threaded.
+
+### Persona inquiry envelope (operationally dead)
+
+Login at `POST /authentication` may return 201 with body `{"inquiry": "<id>"}` instead of `{"user": ..., "permissions": [...]}`. This indicates the persona 2FA-like challenge fired. **In current BRAIN production this is dead code** — zero matches in any rotated production log since the 2026-05-06 audit; both verified secondary accounts that captured login responses got `permissions:["TUTORIAL"]` directly.
+
+The SDK keeps `Client.CompletePersona` as a safety net but does not exercise it. If BRAIN starts firing inquiries again, the spec README has the captured 400/404 negative paths to anchor a test; the 200 success body remains TBD.
+
+### BRAIN day rolls at 3 AM US/Eastern
+
+Both daily submit quota and competition Challenge score roll at 3 AM ET, not midnight. The SDK's `DailyBudget` counter is keyed by a `challengeDayStr()` helper that subtracts 3 hours from `America/New_York` time before formatting.
+
+## What the SDK does NOT cover
+
+- `GET /themes` — returns 404 for everyone now (migrated, theme data is inlined in alpha records).
+- `GET /alphas/{id}/correlations/prod` — 403 for IQC consultant tier through July 2026.
+- Persona inquiry success-path body — TBD pending a live capture.
+- Success-path 2xx bodies for `POST /users`, `/user/email/{verify,reverify}`, `/user/password/{forgot,reset}` — production code (and this SDK) only inspects status; body shape isn't pinned in tests yet.
+
+These are flagged in `the tier-gated endpoint notes` and the individual spec files.

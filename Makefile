@@ -60,8 +60,8 @@ vet: ## go vet
 tidy: ## go mod tidy
 	go mod tidy
 
-clean: ## Remove build artifacts
-	rm -rf bin/ coverage.out coverage.html
+clean: ## Remove build artifacts (cross-platform via Go stdlib)
+	@go run ./internal/tools/clean
 
 install-hooks: ## Install pre-commit hooks (uses .githooks/)
 	git config core.hooksPath .githooks

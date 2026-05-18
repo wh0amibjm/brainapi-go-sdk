@@ -276,14 +276,24 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			headers: headers,
 		}
 
+		startedAt := time.Now()
 		resp, err := c.tls.do(ctx, req)
+		dur := time.Since(startedAt)
+		status := 0
+		if resp != nil {
+			status = resp.status
+		}
+		c.observer.ObserveRequest(r.method, r.path, status, dur, err)
+
 		if err != nil {
 			if attempt >= c.maxRetries {
 				return nil, err
 			}
 			c.logger.Warn("transport error, retrying",
 				"method", r.method, "url", urlStr, "attempt", attempt+1, "err", err.Error())
-			if sleepCtx(ctx, clamp(time.Duration(attempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)) != nil {
+			sleep := clamp(time.Duration(attempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)
+			c.observer.ObserveRetry(r.method, r.path, 0, attempt, RetryKindNetwork, sleep)
+			if sleepCtx(ctx, sleep) != nil {
 				return nil, ctx.Err()
 			}
 			continue
@@ -298,7 +308,9 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 					if longPollSeen > effectiveMaxLongPolls(c.maxLongPolls, r.hints.maxLongPolls) {
 						return nil, ErrLongPollExceeded
 					}
-					if sleepCtx(ctx, clamp(d, longPollFloor, longPollCeiling)) != nil {
+					sleep := clamp(d, longPollFloor, longPollCeiling)
+					c.observer.ObserveLongPoll(r.method, r.path, longPollSeen, sleep)
+					if sleepCtx(ctx, sleep) != nil {
 						return nil, ctx.Err()
 					}
 					continue
@@ -349,6 +361,7 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			if attempt >= c.maxRetries {
 				return resp, nil
 			}
+			c.observer.ObserveRetry(r.method, r.path, 403, attempt, RetryKindForbidden, serverErrFloor)
 			if sleepCtx(ctx, serverErrFloor) != nil {
 				return nil, ctx.Err()
 			}
@@ -360,12 +373,14 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			d = clamp(d, rateLimitFloor, rateLimitCeiling)
 			if cd {
 				c.setCooldown(d)
+				c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindCooldown, d)
 			}
 			if attempt >= c.maxRetries {
 				return resp, &RateLimitError{Status: 429, RetryAfter: d, Cooldown: cd, URL: urlStr, Body: resp.body}
 			}
 			c.logger.Warn("rate-limited, sleeping",
 				"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", attempt+1)
+			c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindRateLimit, d)
 			if sleepCtx(ctx, d) != nil {
 				return nil, ctx.Err()
 			}
@@ -378,6 +393,7 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			}
 			d, _ := resp.retryAfter()
 			d = clamp(d, longPollFloor, longPollCeiling)
+			c.observer.ObserveLongPoll(r.method, r.path, longPollSeen, d)
 			if sleepCtx(ctx, d) != nil {
 				return nil, ctx.Err()
 			}
@@ -390,6 +406,7 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			d := clamp(time.Duration(attempt+1)*serverErrFloor, serverErrFloor, serverErrCeiling)
 			c.logger.Warn("server error, retrying",
 				"status", resp.status, "url", urlStr, "attempt", attempt+1, "sleep", d.String())
+			c.observer.ObserveRetry(r.method, r.path, resp.status, attempt, RetryKindServer, d)
 			if sleepCtx(ctx, d) != nil {
 				return nil, ctx.Err()
 			}
