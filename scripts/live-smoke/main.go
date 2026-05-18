@@ -77,7 +77,8 @@ func main() {
 		fail(logger, "Login", fmt.Errorf("no user record in session: %+v", sess))
 		return
 	}
-	logger.Info("login ok",
+	logger.Info(
+		"login ok",
 		"user_id", sess.User.ID,
 		"permissions", sess.Permissions,
 	)
@@ -92,7 +93,8 @@ func main() {
 		fail(logger, "Probe", fmt.Errorf("empty user id from probe"))
 		return
 	}
-	logger.Info("probe ok",
+	logger.Info(
+		"probe ok",
 		"user_id", info.User.ID,
 		"expiry_seconds", info.Token.Expiry,
 		"permissions", info.Permissions,
@@ -108,7 +110,8 @@ func main() {
 		fail(logger, "Operators", fmt.Errorf("operator catalog is empty"))
 		return
 	}
-	logger.Info("operators ok",
+	logger.Info(
+		"operators ok",
 		"count", len(ops),
 		"first", ops[0].Name,
 	)

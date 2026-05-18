@@ -441,7 +441,8 @@ func buildHeaders(r doRequest, hasBody bool) []hdrPair {
 	if r.bearer != "" {
 		headers = append(headers, hdrPair{"authorization", "Bearer " + r.bearer})
 	}
-	headers = append(headers,
+	headers = append(
+		headers,
 		hdrPair{"accept-language", "en-US,en;q=0.9"},
 		hdrPair{"origin", "https://platform.worldquantbrain.com"},
 		hdrPair{"referer", "https://platform.worldquantbrain.com/"},

@@ -15,7 +15,7 @@ A typed Go SDK + cross-platform CLI for the [WorldQuant BRAIN](https://platform.
 # Library
 go get github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi
 
-# CLI (Go 1.24+)
+# CLI (Go 1.26+)
 go install github.com/wh0amibjm/brainapi-go-sdk/cmd/brainapi@latest
 ```
 
