@@ -266,14 +266,18 @@ type Competition struct {
 }
 
 // Leaderboard is the user's standing inside a Competition.
+//
+// Score is intentionally json.Number — the BRAIN edge returns it as an int
+// for active users with non-zero standings (e.g. 45565) but as a float "0.0"
+// for secondary accounts with no competition activity. Captured live 2026-05-18.
 type Leaderboard struct {
-	Alphas     int     `json:"alphas"`
-	Country    string  `json:"country"`
-	Level      string  `json:"level"`
-	Rank       int     `json:"rank"`
-	Score      int     `json:"score"`
-	University *string `json:"university"`
-	User       string  `json:"user"`
+	Alphas     int         `json:"alphas"`
+	Country    string      `json:"country"`
+	Level      string      `json:"level"`
+	Rank       int         `json:"rank"`
+	Score      json.Number `json:"score"`
+	University *string     `json:"university"`
+	User       string      `json:"user"`
 }
 
 // ActivityKind is the path-segment for GET /users/self/activities/{kind}.

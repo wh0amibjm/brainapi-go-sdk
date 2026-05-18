@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
@@ -25,8 +27,8 @@ func newAuthLoginCmd() *cobra.Command {
 			}
 			ctx, cancel := ctxWithSignal()
 			defer cancel()
-			user := firstNonEmpty(gf.email, "")
-			pass := firstNonEmpty(gf.password, "")
+			user := firstNonEmpty(gf.email, os.Getenv("BRAINAPI_USER"))
+			pass := firstNonEmpty(gf.password, os.Getenv("BRAINAPI_PASS"))
 			sess, err := cl.Login(ctx, user, pass)
 			if err != nil {
 				writeErr(err)

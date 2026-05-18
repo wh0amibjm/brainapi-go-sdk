@@ -46,21 +46,22 @@ func (c *Client) Login(ctx context.Context, email, password string) (*Session, e
 	return &sess, nil
 }
 
-// Probe calls GET /authentication. Returns the live session info. 401 from
-// this endpoint surfaces as ErrNotAuthenticated (after the do() loop has
-// already attempted one re-login if credentials are cached).
+// Probe calls GET /authentication. Returns the live session info. Treats a
+// 401 or an empty 200 body (observed in production after Logout destroys
+// the server-side session but cached cookies look syntactically valid) as
+// ErrNotAuthenticated — both mean "no usable session".
 func (c *Client) Probe(ctx context.Context) (*SessionInfo, error) {
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
 		path:   "/authentication",
 	})
 	if err != nil {
-		if resp != nil && resp.status == 401 {
+		if ae, ok := AsAPIError(err); ok && ae.Status == 401 {
 			return nil, ErrNotAuthenticated
 		}
 		return nil, err
 	}
-	if resp.status == 401 {
+	if resp.status == 401 || len(resp.body) == 0 {
 		return nil, ErrNotAuthenticated
 	}
 	var info SessionInfo
