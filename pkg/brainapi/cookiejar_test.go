@@ -2,6 +2,8 @@ package brainapi_test
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -83,5 +85,49 @@ func TestCookieJar_BadPathIsNonFatal(t *testing.T) {
 	}
 	if cl.CookieJarPath() != jarPath {
 		t.Errorf("jar path not preserved: %q", cl.CookieJarPath())
+	}
+}
+
+func TestLogout_ClearsJarFile(t *testing.T) {
+	t.Parallel()
+	jarPath := filepath.Join(t.TempDir(), "cookies.json")
+
+	srv, throwaway := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "POST /authentication":
+			http.SetCookie(w, &http.Cookie{
+				Name: "session_token", Value: "live-xyz", Path: "/", HttpOnly: true,
+			})
+			w.WriteHeader(201)
+			_, _ = w.Write(loadFixture(t, "auth_login_201_normal.json"))
+		case "DELETE /authentication":
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte("{}"))
+		default:
+			w.WriteHeader(404)
+		}
+	})
+	_ = throwaway
+
+	cl, err := brainapi.NewClient(brainapi.Options{
+		BaseURL:       srv.URL,
+		CookieJarPath: jarPath,
+		Timeout:       2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := cl.Login(context.Background(), "u@x.com", "pw"); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if _, err := os.Stat(jarPath); err != nil {
+		t.Fatalf("jar file should exist after Login: %v", err)
+	}
+
+	if err := cl.Logout(context.Background()); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if _, err := os.Stat(jarPath); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("jar file should be removed after Logout, stat err = %v", err)
 	}
 }

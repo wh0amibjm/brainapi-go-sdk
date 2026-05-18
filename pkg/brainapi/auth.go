@@ -71,13 +71,24 @@ func (c *Client) Probe(ctx context.Context) (*SessionInfo, error) {
 	return &info, nil
 }
 
-// Logout calls DELETE /authentication. Idempotent — 200 + {} on success.
+// Logout calls DELETE /authentication. On success it also wipes the local
+// session state: the persisted cookie jar file (if any), the in-memory jar
+// cookies for the configured baseURL, and the cached email/password. The
+// Client is safe to reuse for a fresh Login afterwards.
+//
+// If DELETE fails (network error, 5xx, etc.) local state is left untouched
+// so the caller can retry without losing a still-valid server-side session.
 func (c *Client) Logout(ctx context.Context) error {
 	_, err := c.do(ctx, doRequest{
 		method: "DELETE",
 		path:   "/authentication",
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	c.tls.clearJar()
+	c.ClearCredentials()
+	return nil
 }
 
 // CompletePersona drives the persona-inquiry flow. Operationally dead-code

@@ -214,6 +214,19 @@ func (c *Client) SetCredentials(email, password string) {
 	c.password = password
 }
 
+// ClearCredentials wipes the cached email/password, undoing SetCredentials.
+// After this call 401 responses propagate ErrNotAuthenticated instead of
+// triggering a transparent re-login. Logout invokes this automatically;
+// callers in long-lived services should invoke it when the credentials are
+// no longer needed (e.g. after switching accounts). Safe to call
+// concurrently with other Client methods.
+func (c *Client) ClearCredentials() {
+	c.credMu.Lock()
+	defer c.credMu.Unlock()
+	c.email = ""
+	c.password = ""
+}
+
 func (c *Client) credentials() (string, string) {
 	c.credMu.RLock()
 	defer c.credMu.RUnlock()

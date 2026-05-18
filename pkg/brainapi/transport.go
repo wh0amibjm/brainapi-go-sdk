@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -212,6 +213,40 @@ func (t *tlsHTTP) saveJar() error {
 		return err
 	}
 	return os.Rename(tmp, t.jarPath)
+}
+
+// clearJar wipes any cookies the in-memory jar holds for the configured base
+// URL and removes the persisted jar file (if jarPath is set). Idempotent;
+// a missing file is not an error. Errors from os.Remove are surfaced via
+// the logger rather than returned so they don't mask the caller's primary
+// signal (the DELETE /authentication result in Logout).
+func (t *tlsHTTP) clearJar() {
+	if jar := t.client.GetCookieJar(); jar != nil {
+		current := jar.Cookies(t.baseURL)
+		if len(current) > 0 {
+			past := time.Now().Add(-time.Hour)
+			expired := make([]*fhttp.Cookie, 0, len(current))
+			for _, ck := range current {
+				expired = append(expired, &fhttp.Cookie{
+					Name:    ck.Name,
+					Path:    ck.Path,
+					Domain:  ck.Domain,
+					Expires: past,
+					MaxAge:  -1,
+				})
+			}
+			jar.SetCookies(t.baseURL, expired)
+		}
+	}
+
+	if t.jarPath == "" {
+		return
+	}
+	t.saveMu.Lock()
+	defer t.saveMu.Unlock()
+	if err := os.Remove(t.jarPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.logger.Warn("clear cookie jar file failed", "path", t.jarPath, "err", err.Error())
+	}
 }
 
 // ---------------------------------------------------------------------------
