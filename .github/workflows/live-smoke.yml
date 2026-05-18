@@ -1,0 +1,92 @@
+name: live-smoke
+
+# Weekly scheduled live BRAIN integration check.
+# Catches silent BRAIN-side schema upgrades (the v0.1.1 *string -> object
+# class of bugs) before they bite production.
+#
+# Requires repo secrets:
+#   BRAINAPI_USER  (account email)
+#   BRAINAPI_PASS  (account password)
+#
+# Set via: gh secret set BRAINAPI_USER --body "..."
+#          gh secret set BRAINAPI_PASS --body "..."
+#
+# On failure: opens a GitHub issue with the workflow run link and
+# triage instructions. Issue is opened with default labels only --
+# add `schema-drift` etc. by hand if you want them grouped.
+
+on:
+  schedule:
+    # Monday 07:00 UTC ≈ Sunday 03:00 EST. Picks a time when BRAIN's own
+    # 3AM-ET challenge-day rollover is well past, so daily counters
+    # observed by this run are stable for the new day.
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write   # required for the failure auto-issue
+
+env:
+  GO_VERSION: "1.26"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: run live-smoke
+        env:
+          BRAINAPI_USER: ${{ secrets.BRAINAPI_USER }}
+          BRAINAPI_PASS: ${{ secrets.BRAINAPI_PASS }}
+        run: |
+          if [ -z "$BRAINAPI_USER" ] || [ -z "$BRAINAPI_PASS" ]; then
+            echo "::error::BRAINAPI_USER/BRAINAPI_PASS secrets not set on this repo"
+            exit 2
+          fi
+          go run ./scripts/live-smoke
+
+      - name: open issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > /tmp/issue.md <<EOF
+          Scheduled \`live-smoke\` run failed.
+
+          **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Triggered by**: \`${{ github.event_name }}\` on \`${{ github.ref }}\`
+          **Date (UTC)**: $(date -u +"%Y-%m-%d %H:%M:%S")
+
+          ### Likely cause
+
+          BRAIN silently upgraded a response field (string -> object,
+          new status enum, renamed key, etc.) and our typed struct no
+          longer decodes. Same class as the v0.1.1 / v0.1.2 patches.
+
+          ### Reproduce locally
+
+          \`\`\`bash
+          BRAINAPI_USER=... BRAINAPI_PASS=... go run ./scripts/live-smoke
+          \`\`\`
+
+          The failing step is logged on stderr (line prefixed \`N/9 ... FAILED\`).
+
+          ### Triage
+
+          1. Identify the failing endpoint from the step label.
+          2. Open the relevant \`pkg/brainapi/types.go\` struct.
+          3. Switch the drifted field to \`json.RawMessage\` (mirror the
+             other metadata fields in that struct; see
+             [v0.1.1](https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.1)
+             / [v0.1.2](https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.2)).
+          4. \`go test -race ./...\` + bump patch version + release.
+          EOF
+          gh issue create \
+            --title "live-smoke failed $(date -u +%Y-%m-%d) — possible schema drift" \
+            --body-file /tmp/issue.md

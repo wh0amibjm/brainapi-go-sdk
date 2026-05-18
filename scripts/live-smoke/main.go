@@ -1,13 +1,23 @@
-// live-smoke runs three minimum-budget calls against real BRAIN to prove
-// the Go SDK's TLS impersonation + protocol decoding actually work end-to-end:
+// live-smoke runs nine minimum-budget calls against real BRAIN to prove
+// the Go SDK's TLS impersonation + protocol decoding still match what
+// BRAIN actually returns today. The CI scheduled workflow runs this
+// weekly so silent BRAIN-side schema upgrades (the v0.1.1/v0.1.2 class
+// of bugs) get caught at fixture-refresh time instead of in production.
 //
-//  1. POST /authentication (Basic auth) — does Cloudflare/edge accept our JA3?
-//  2. GET  /authentication (probe)      — did we get a session cookie?
-//  3. GET  /operators                   — does a real BRAIN GET decode?
+// Steps:
 //
-// It does NOT submit alphas or run simulations (those consume daily budget
-// against the main account). It does NOT exercise the persona or registration
-// flows.
+//  1. POST /authentication                (Login)        — Cloudflare/edge accept our JA3?
+//  2. GET  /authentication                (Probe)        — session cookie working?
+//  3. GET  /operators                     (Operators)    — bare array decode
+//  4. GET  /users/self                    (Self)         — User struct still matches
+//  5. GET  /users/self/competitions       (Competitions) — Competition / Leaderboard / Team
+//  6. GET  /users/self/activities/...     (Activities)   — ActivityStream + RecordSetBlock
+//  7. GET  /users/self/alphas             (ListAlphas)   — Page[Alpha] including team/origin
+//  8. GET  /alphas/{first}                (GetAlpha)     — single Alpha detail (skipped if empty)
+//  9. GET  /data-fields                   (DataFields)   — DataFieldsPage / NamedRef
+//
+// It does NOT submit alphas or run simulations (those consume daily
+// budget and have visible side effects against the main account).
 //
 // Usage:
 //
@@ -17,13 +27,12 @@
 //
 // Exit codes:
 //
-//	0  all three calls succeeded
+//	0  all nine calls succeeded
 //	1  any call failed (details in stderr)
 //	2  missing credentials
 //
-// The script picks the deterministic browser profile for the supplied email
-// (matches what production secondary accounts use), so a fingerprint mismatch from
-// the production bridge will surface here.
+// The script picks the deterministic browser profile for the supplied
+// email, so a fingerprint mismatch from the production bridge will surface here.
 package main
 
 import (
@@ -48,7 +57,7 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	profile := brainapi.ProfileForEmail(email)
-	logger.Info("live-smoke starting", "email", redact(email), "profile", profile)
+	logger.Info("live-smoke starting", "email", redact(email), "profile", profile, "steps", 9)
 
 	cl, err := brainapi.NewClient(brainapi.Options{
 		Profile:       profile,
@@ -64,59 +73,113 @@ func main() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	// Step 1 — login.
+	// 1/9 — login.
 	sess, err := cl.Login(ctx, email, pass)
 	if err != nil {
-		fail(logger, "Login", err)
+		fail(logger, "1/9 Login", err)
 		return
 	}
 	if sess.User == nil {
-		fail(logger, "Login", fmt.Errorf("no user record in session: %+v", sess))
+		fail(logger, "1/9 Login", fmt.Errorf("no user record in session: %+v", sess))
 		return
 	}
-	logger.Info(
-		"login ok",
-		"user_id", sess.User.ID,
-		"permissions", sess.Permissions,
-	)
+	logger.Info("1/9 login ok", "user_id", sess.User.ID, "permissions", len(sess.Permissions))
 
-	// Step 2 — probe.
+	// 2/9 — probe.
 	info, err := cl.Probe(ctx)
 	if err != nil {
-		fail(logger, "Probe", err)
+		fail(logger, "2/9 Probe", err)
 		return
 	}
 	if info.User.ID == "" {
-		fail(logger, "Probe", fmt.Errorf("empty user id from probe"))
+		fail(logger, "2/9 Probe", fmt.Errorf("empty user id from probe"))
 		return
 	}
-	logger.Info(
-		"probe ok",
-		"user_id", info.User.ID,
-		"expiry_seconds", info.Token.Expiry,
-		"permissions", info.Permissions,
-	)
+	logger.Info("2/9 probe ok", "user_id", info.User.ID, "expiry_seconds", info.Token.Expiry)
 
-	// Step 3 — operators.
+	// 3/9 — operators.
 	ops, err := cl.Operators(ctx)
 	if err != nil {
-		fail(logger, "Operators", err)
+		fail(logger, "3/9 Operators", err)
 		return
 	}
 	if len(ops) == 0 {
-		fail(logger, "Operators", fmt.Errorf("operator catalog is empty"))
+		fail(logger, "3/9 Operators", fmt.Errorf("operator catalog is empty"))
 		return
 	}
-	logger.Info(
-		"operators ok",
-		"count", len(ops),
-		"first", ops[0].Name,
-	)
+	logger.Info("3/9 operators ok", "count", len(ops), "first", ops[0].Name)
 
-	logger.Info("ALL THREE CALLS SUCCEEDED — TLS impersonation + decoding verified against real BRAIN")
+	// 4/9 — self (User struct).
+	user, err := cl.Self(ctx)
+	if err != nil {
+		fail(logger, "4/9 Self", err)
+		return
+	}
+	if user.ID == "" {
+		fail(logger, "4/9 Self", fmt.Errorf("empty user id"))
+		return
+	}
+	logger.Info("4/9 self ok", "user_id", user.ID, "verified", user.Verified)
+
+	// 5/9 — competitions. Exercises Competition.Team and Leaderboard.University
+	// — both of which BRAIN silently upgraded from string to object on
+	// 2026-05-18, breaking SDK v0.1.0. This step is the canary.
+	comps, err := cl.Competitions(ctx)
+	if err != nil {
+		fail(logger, "5/9 Competitions", err)
+		return
+	}
+	logger.Info("5/9 competitions ok", "count", comps.Count, "page_size", len(comps.Results))
+
+	// 6/9 — activities (ActivityStream + RecordSetBlock heterogeneous tuples).
+	activ, err := cl.Activities(ctx, brainapi.ActivitySubmissions)
+	if err != nil {
+		fail(logger, "6/9 Activities", err)
+		return
+	}
+	logger.Info("6/9 activities ok", "type", string(activ.Type))
+
+	// 7/9 — alphas list. Exercises Alpha.Team / Alpha.Color / Alpha.Category
+	// (the other half of the v0.1.1 schema-drift fix).
+	page, err := cl.ListAlphas(ctx, brainapi.ListAlphasOptions{Limit: 3})
+	if err != nil {
+		fail(logger, "7/9 ListAlphas", err)
+		return
+	}
+	logger.Info("7/9 alphas list ok", "count", page.Count, "page_size", len(page.Results))
+
+	// 8/9 — alpha detail. Skipped (with warning) when the account has no
+	// alphas yet — common for a fresh test account, not a regression.
+	if len(page.Results) > 0 {
+		first := page.Results[0].ID
+		a, err := cl.GetAlpha(ctx, first)
+		if err != nil {
+			fail(logger, "8/9 GetAlpha", err)
+			return
+		}
+		logger.Info("8/9 alpha detail ok", "id", a.ID, "status", a.Status)
+	} else {
+		logger.Warn("8/9 alpha detail SKIPPED — account has zero alphas (not a failure)")
+	}
+
+	// 9/9 — data-fields (DataFieldsPage + NamedRef inside Category/Dataset/Subcategory).
+	dfPage, err := cl.DataFields(ctx, brainapi.DataFieldsQuery{
+		InstrumentType: "EQUITY",
+		Region:         "USA",
+		Universe:       "TOP3000",
+		Delay:          1,
+		Limit:          3,
+	})
+	if err != nil {
+		fail(logger, "9/9 DataFields", err)
+		return
+	}
+	logger.Info("9/9 data-fields ok", "count", dfPage.Count, "page_size", len(dfPage.Results))
+
+	logger.Info("ALL 9 STEPS PASSED — TLS impersonation + 9-endpoint decoding verified against real BRAIN")
 }
 
 func fail(logger *slog.Logger, step string, err error) {
