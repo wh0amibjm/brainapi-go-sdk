@@ -19,9 +19,19 @@
 // It does NOT submit alphas or run simulations (those consume daily
 // budget and have visible side effects against the main account).
 //
+// Recommended account: a secondary account, NOT the main one. Live-smoke is a
+// canary -- it runs weekly on CI and on ad-hoc demand, so quota/rate-limit
+// pressure adds up. secondary accounts also exercise a different permission
+// envelope (fewer perms, fewer data-fields), making the test slightly
+// more representative of what production secondary account workers see. A
+// dedicated test account is ideal; pulling one from an existing pool
+// (e.g. the secondary account store status='active' rows) works too.
+// NEVER point this at the main account -- one bad week of CI and you
+// burn through the precious daily budgets.
+//
 // Usage:
 //
-//	$env:BRAINAPI_USER = "me@example.com"
+//	$env:BRAINAPI_USER = "secondary account@example.com"
 //	$env:BRAINAPI_PASS = "..."
 //	go run ./scripts/live-smoke
 //
