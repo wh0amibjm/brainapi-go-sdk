@@ -12,3 +12,7 @@ coverage.html
 cookies-*.json
 .env
 .env.local
+
+# AI tooling (locally generated)
+.serena/
+AGENTS.md
