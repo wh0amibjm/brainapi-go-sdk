@@ -75,8 +75,8 @@ type Alpha struct {
 	Name            *string          `json:"name,omitempty"`
 	Favorite        bool             `json:"favorite,omitempty"`
 	Hidden          bool             `json:"hidden,omitempty"`
-	Color           *string          `json:"color,omitempty"`
-	Category        *string          `json:"category,omitempty"`
+	Color           json.RawMessage  `json:"color,omitempty"`
+	Category        json.RawMessage  `json:"category,omitempty"`
 	Tags            []string         `json:"tags,omitempty"`
 	Classifications []Classification `json:"classifications,omitempty"`
 	Grade           string           `json:"grade,omitempty"`
@@ -91,7 +91,7 @@ type Alpha struct {
 	Themes          json.RawMessage  `json:"themes,omitempty"`
 	Pyramids        json.RawMessage  `json:"pyramids,omitempty"`
 	PyramidThemes   json.RawMessage  `json:"pyramidThemes,omitempty"`
-	Team            *string          `json:"team,omitempty"`
+	Team            json.RawMessage  `json:"team,omitempty"`
 	Origin          json.RawMessage  `json:"origin,omitempty"`
 }
 
@@ -256,7 +256,7 @@ type Competition struct {
 	Countries         json.RawMessage `json:"countries"`
 	ExcludedCountries json.RawMessage `json:"excludedCountries"`
 	Universities      json.RawMessage `json:"universities"`
-	Team              *string         `json:"team"`
+	Team              json.RawMessage `json:"team"`
 	TeamBased         bool            `json:"teamBased"`
 	PrizeBoard        bool            `json:"prizeBoard"`
 	UniversityBoard   bool            `json:"universityBoard"`
@@ -271,13 +271,13 @@ type Competition struct {
 // for active users with non-zero standings (e.g. 45565) but as a float "0.0"
 // for secondary accounts with no competition activity. Captured live 2026-05-18.
 type Leaderboard struct {
-	Alphas     int         `json:"alphas"`
-	Country    string      `json:"country"`
-	Level      string      `json:"level"`
-	Rank       int         `json:"rank"`
-	Score      json.Number `json:"score"`
-	University *string     `json:"university"`
-	User       string      `json:"user"`
+	Alphas     int             `json:"alphas"`
+	Country    string          `json:"country"`
+	Level      string          `json:"level"`
+	Rank       int             `json:"rank"`
+	Score      json.Number     `json:"score"`
+	University json.RawMessage `json:"university"`
+	User       string          `json:"user"`
 }
 
 // ActivityKind is the path-segment for GET /users/self/activities/{kind}.

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-18
+
+### Fixed
+- BRAIN silently upgraded several response fields from `string` to
+  structured objects, breaking `users competitions` and `alphas list/get`
+  with `json: cannot unmarshal object into Go struct field ... of type
+  string`. Caught by live the TypeScript client integration against an account
+  with active competition entries. Switched five metadata fields to
+  `json.RawMessage` so the SDK no longer dictates their shape (it never
+  needed to — none had typed callers inside the repo):
+  - `Alpha.Team` (BRAIN now returns `{id, type, name, university}`)
+  - `Competition.Team` (same drift)
+  - `Alpha.Color`, `Alpha.Category` (defensive — same `*string` metadata pattern as Team)
+  - `Leaderboard.University` (defensive — peer of Team in the same struct family)
+
+  Callers that need typed access can `json.Unmarshal(field, &dst)`.
+  Mirrors the existing convention (`Alpha.Settings`, `User.Address`,
+  `Competition.Countries`, etc. were already `json.RawMessage`).
+
 ## [0.1.0] - 2026-05-18
 
 Initial public release. Requires Go 1.26+.
@@ -47,5 +66,6 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
-[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.0
