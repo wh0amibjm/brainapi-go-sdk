@@ -1,0 +1,49 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - typecheck
+    - gosimple
+    - gocritic
+    - gofumpt
+    - misspell
+    - unconvert
+    - unparam
+    - bodyclose
+    - nilerr
+    - errorlint
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+  gofumpt:
+    extra-rules: true
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - unparam
+        - bodyclose
+    - path: examples/
+      linters:
+        - errcheck
+        - unparam
+  max-issues-per-linter: 0
+  max-same-issues: 0

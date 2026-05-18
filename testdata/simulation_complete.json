@@ -1,0 +1,1 @@
+{"id":"R8sL22iY4nxcgCxslACWlI","type":"REGULAR","settings":{"instrumentType":"EQUITY","region":"USA","universe":"TOP3000","delay":1,"decay":12,"neutralization":"SUBINDUSTRY","truncation":0.02,"pasteurization":"ON","unitHandling":"VERIFY","nanHandling":"OFF","language":"FASTEXPR","visualization":false},"regular":"close","status":"COMPLETE","alpha":"qMPjAxnO"}

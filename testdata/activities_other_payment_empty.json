@@ -1,0 +1,1 @@
+{"total":{"start":"2025-08-22","end":"2026-05-05","value":0},"records":{"schema":{"name":"other-payment","title":"Other Payment","properties":[{"name":"date","title":"Date","type":"date"},{"name":"value","title":"Other Payment","type":"amount"},{"name":"type","title":"Type","type":"text"}]},"records":[]},"currency":"USD","type":"LIST"}

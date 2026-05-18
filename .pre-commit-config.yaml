@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: local
+    hooks:
+      - id: gofumpt
+        name: gofumpt -extra
+        entry: gofumpt -extra -l -w
+        language: system
+        files: \.go$
+        exclude: ^vendor/
+
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --timeout=3m
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        language: system
+        pass_filenames: false
+        files: ^go\.(mod|sum)$
+
+      - id: go-test-short
+        name: go test -race -short
+        entry: go test -race -short -count=1 ./...
+        language: system
+        pass_filenames: false
+        files: \.go$

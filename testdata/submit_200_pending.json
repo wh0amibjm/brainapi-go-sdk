@@ -1,0 +1,1 @@
+{"is":{"checks":[{"name":"LOW_SHARPE","result":"PASS","limit":1.25,"value":2.25},{"name":"LOW_FITNESS","result":"PASS","limit":1.0,"value":1.52},{"name":"SELF_CORRELATION","result":"PENDING"}]}}

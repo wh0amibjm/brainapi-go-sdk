@@ -1,0 +1,14 @@
+bin/
+coverage.out
+coverage.html
+*.exe
+*.test
+*.prof
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+cookies-*.json
+.env
+.env.local

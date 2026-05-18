@@ -1,0 +1,1 @@
+{"schema":{"name":"pnl","title":"PnL","properties":[{"name":"date","title":"Date","type":"date"},{"name":"pnl","title":"PnL","type":"amount"}]},"records":[["2019-01-02",30026.0],["2019-01-03",35174.0],["2019-01-04",36900.5]]}

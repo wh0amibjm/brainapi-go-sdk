@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+# Local git pre-commit hook. Mirrors .pre-commit-config.yaml local hooks so
+# contributors who don't install the `pre-commit` framework still get the same gate.
+# Activate via: make install-hooks
+
+set -e
+
+echo "[pre-commit] gofumpt -extra"
+gofumpt -extra -l -w .
+
+echo "[pre-commit] go vet"
+go vet ./...
+
+echo "[pre-commit] golangci-lint"
+golangci-lint run --timeout=3m
+
+echo "[pre-commit] go mod tidy"
+go mod tidy
+
+echo "[pre-commit] go test -race -short"
+go test -race -short -count=1 ./...
