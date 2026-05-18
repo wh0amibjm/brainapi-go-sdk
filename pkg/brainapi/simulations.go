@@ -84,7 +84,11 @@ func (c *Client) WaitForSimulation(ctx context.Context, id string) (*Simulation,
 		if err != nil {
 			return nil, err
 		}
-		if s.Status == "COMPLETE" || s.Status == "FAIL" || s.Status == "ERROR" {
+		// BRAIN populates `alpha` whenever the sim produced one — regardless
+		// of whether status is COMPLETE or WARNING (reversion / low-corr
+		// advisories etc.). Mirror the reference project's check: any populated alpha
+		// counts as terminal-success. FAIL/ERROR are still explicit failures.
+		if s.Alpha != "" || s.Status == "FAIL" || s.Status == "ERROR" {
 			return s, nil
 		}
 		d, _ := parseRetryAfter("") // GetSimulation strips headers; default longPollFloor

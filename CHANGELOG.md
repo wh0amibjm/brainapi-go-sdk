@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-18
+
+### Fixed
+- `WaitForSimulation` only treated `COMPLETE` / `FAIL` / `ERROR` as
+  terminal, hanging forever on `WARNING` (e.g. reversion-component
+  advisory) and any future status BRAIN might add. BRAIN populates
+  `alpha` whenever a sim produced one regardless of the status string,
+  so the wait loop now terminates on `s.Alpha != ""` (success path) or
+  explicit `FAIL` / `ERROR` (failure path). Mirrors the reference project's
+  long-tested `'alpha' in body` check; eliminates a real `long_poll_
+  exceeded` we hit live on `ts_zscore(close, 20)` against a main
+  account where BRAIN returned `status: "WARNING", alpha: "..."`.
+  Caller-visible effect: `simulations wait` (and the `simulate-and-
+  fetch` composite path that builds on it) no longer dead-locks on
+  warning-only verdicts.
+
 ## [0.1.1] - 2026-05-18
 
 ### Fixed
@@ -66,6 +82,7 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
-[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.2
 [0.1.1]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.0
