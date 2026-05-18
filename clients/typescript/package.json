@@ -1,0 +1,51 @@
+{
+  "name": "@wh0amibjm/brainapi",
+  "version": "0.1.2",
+  "description": "TypeScript client for the brainapi CLI (WorldQuant BRAIN platform API)",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "scripts/install.mjs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "node scripts/install.mjs"
+  },
+  "keywords": [
+    "brainapi",
+    "worldquant",
+    "alpha",
+    "cli-wrapper"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "author": "wh0amibjm",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wh0amibjm/brainapi-go-sdk.git",
+    "directory": "clients/typescript"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
