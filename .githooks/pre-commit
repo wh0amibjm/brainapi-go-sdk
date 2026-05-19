@@ -1,21 +1,24 @@
 #!/usr/bin/env sh
-# Local git pre-commit hook. Mirrors .pre-commit-config.yaml local hooks so
-# contributors who don't install the `pre-commit` framework still get the same gate.
-# Activate via: make install-hooks
+# Pre-commit hook wrapper -- delegates to the pre-commit framework so the
+# hook set is defined exactly once, in .pre-commit-config.yaml. Previously
+# this file kept its own hardcoded list of Go checks and the two
+# definitions drifted (the stock trailing-whitespace, end-of-file-fixer,
+# check-yaml, check-merge-conflict, and check-added-large-files hooks
+# existed only on the framework side, so contributors who relied on
+# `make install-hooks` without installing the framework got a strictly
+# weaker gate).
+#
+# Install: make install-hooks  (sets core.hooksPath to .githooks/)
+# Requires: pre-commit framework -- install via `pip install pre-commit`
+# or `uvx pre-commit`. The Makefile target prompts for this if missing.
 
 set -e
 
-echo "[pre-commit] gofumpt -extra"
-gofumpt -extra -l -w .
+if ! command -v pre-commit >/dev/null 2>&1; then
+    echo "[.githooks/pre-commit] pre-commit framework not installed." >&2
+    echo "  Install: pip install pre-commit  (or  uvx pre-commit)" >&2
+    echo "  Then:    make install-hooks" >&2
+    exit 1
+fi
 
-echo "[pre-commit] go vet"
-go vet ./...
-
-echo "[pre-commit] golangci-lint"
-golangci-lint run --timeout=3m
-
-echo "[pre-commit] go mod tidy"
-go mod tidy
-
-echo "[pre-commit] go test -race -short"
-go test -race -short -count=1 ./...
+exec pre-commit run --hook-stage commit
