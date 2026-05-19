@@ -248,6 +248,39 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 	return &s, nil
 }
 
+// AlphaSelfCorrelation calls GET /alphas/{id}/correlations/self and long-polls
+// (503 = queued, 200 = terminal) until BRAIN returns the top-N most-correlated
+// already-submitted alphas plus min/max aggregates. Cached server-side after
+// the first run per alpha; subsequent calls return 200 immediately.
+//
+// Use BEFORE SubmitAlpha: if *block.Max >= 0.7 the alpha will be rejected by
+// the post-submit SELF_CORRELATION check and burn a DailyBudget.Submits slot
+// for nothing. This endpoint itself is free of submit-budget cost.
+//
+// Sibling /correlations/prod returns 403 on the IQC consultant tier through
+// July 2026 and is not exposed by the SDK.
+func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorrelationBlock, error) {
+	if id == "" {
+		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/alphas/" + id + "/correlations/self",
+		hints:  retryHints{longPoll503: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.body) == 0 {
+		return nil, ErrLongPollExceeded
+	}
+	var b SelfCorrelationBlock
+	if err := json.Unmarshal(resp.body, &b); err != nil {
+		return nil, fmt.Errorf("brainapi: parse self-correlation: %w", err)
+	}
+	return &b, nil
+}
+
 // ListAlphas returns the first page of GET /users/self/alphas with the
 // supplied options. Use ListAlphasAll for an iterator over all pages.
 func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[Alpha], error) {

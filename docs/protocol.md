@@ -26,6 +26,7 @@ Source of truth: `the protocol captures under testdata/` (13 spec files, Chrome-
 | GET | `/alphas/{id}/check` | `Client.CheckAlpha` |
 | POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
 | GET | `/alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` |
+| GET | `/alphas/{id}/correlations/self` | `Client.AlphaSelfCorrelation` |
 | POST | `/simulations` | `Client.CreateSimulation` |
 | GET | `/simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` |
 | GET | `/operators` | `Client.Operators` |
@@ -57,6 +58,16 @@ Migrated to GET-only some time before 2026-05-05. The TS code silently swallowed
 ### `POST /alphas/{id}/submit` returns 503 to mean "queued"
 
 503 here is **not** an error. It's BRAIN's "I've queued your submit, please poll the same URL with GET" signal. The SDK treats POST 503 as a terminal success (with empty body) and immediately starts the GET polling loop.
+
+### `GET /alphas/{id}/correlations/self` is the **pre-submit** corr gate
+
+The submit verdict-bearing `SELF_CORRELATION` check (§ above) only fires after you've already burned a daily submit slot. The standalone correlation endpoint lets you check the same value cheaply before calling `/submit`:
+
+- **Long-poll:** 503 = queued (same `Retry-After` clamp as `/submit`; observed ~3 retries to terminal in practice), 200 = terminal. Cached server-side per alpha — re-running the same alpha returns 200 immediately on the second call.
+- **Response body:** `{schema, records, min, max}`. `records` are positional tuples (top N most-correlated already-submitted alphas) per `schema.properties[*].name`: `id, name, instrumentType, region, universe, correlation, sharpe, returns, turnover, fitness, margin`. `min`/`max` are the aggregate correlation values across the record set.
+- **Threshold:** BRAIN rejects submissions on `correlation >= 0.7` (per `testdata/submit_403_corr_fail.json`). Gate `SubmitAlpha` on `block.Max < 0.7` to avoid wasted `corr_rejected` verdicts and preserve daily submit budget.
+- **Chrome-verified:** 2026-05-19 against `platform.worldquantbrain.com/alphas/{id}` side panel → green "refresh" icon on the "Self Correlation" row triggers this endpoint; the panel's displayed Maximum/Minimum are the body's `max`/`min` verbatim.
+- **Sibling `/correlations/prod`** is 403 on the IQC consultant tier (already noted in "does NOT cover" below).
 
 ### `/users/self/activities/{kind}` records are positional tuples
 

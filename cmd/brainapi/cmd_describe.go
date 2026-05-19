@@ -102,6 +102,7 @@ var longPollCommands = map[string]bool{
 	"alphas check":     true,
 	"alphas submit":    true,
 	"alphas pnl":       true,
+	"alphas corr":      true,
 	"simulations wait": true,
 }
 
@@ -230,6 +231,12 @@ var staticContracts = []contractSpec{
 		ID:      "submit-corr-only-via-submit",
 		Topic:   "alphas submit",
 		Summary: "SELF_CORRELATION verdict appears only via POST + GET long-poll on /alphas/{id}/submit. GET /alphas/{id} stays result:'PENDING' indefinitely for unsubmitted alphas.",
+		Ref:     "docs/sdk-protocol.md",
+	},
+	{
+		ID:      "presubmit-corr-gate",
+		Topic:   "alphas corr",
+		Summary: "GET /alphas/{id}/correlations/self returns {schema,records,min,max} after a 503-queued long-poll (cached after first run). Gate SubmitAlpha on max < 0.7 — same threshold as the post-submit SELF_CORRELATION check, but free of submit-budget cost. /correlations/prod is 403 on IQC consultant tier through July 2026.",
 		Ref:     "docs/sdk-protocol.md",
 	},
 	{

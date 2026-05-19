@@ -11,13 +11,14 @@ import (
 func newAlphasCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "alphas",
-		Short: "Alpha endpoints (get, check, submit, pnl, list)",
+		Short: "Alpha endpoints (get, check, submit, pnl, corr, list)",
 	}
 	cmd.AddCommand(
 		newAlphaGetCmd(),
 		newAlphaCheckCmd(),
 		newAlphaSubmitCmd(),
 		newAlphaPnLCmd(),
+		newAlphaCorrCmd(),
 		newAlphaListCmd(),
 	)
 	return cmd
@@ -90,6 +91,30 @@ func newAlphaSubmitCmd() *cobra.Command {
 				return nil
 			}
 			writeOK(v)
+			return nil
+		},
+	}
+}
+
+func newAlphaCorrCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "corr <alpha-id>",
+		Short: "GET /alphas/{id}/correlations/self: pre-submit corr check (gate SubmitAlpha on max<0.7)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			b, err := cl.AlphaSelfCorrelation(ctx, args[0])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(b)
 			return nil
 		},
 	}

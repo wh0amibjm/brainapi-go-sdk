@@ -137,6 +137,20 @@ type RecordSetBlock struct {
 	Records []json.RawMessage `json:"records,omitempty"`
 }
 
+// SelfCorrelationBlock is the body returned by GET /alphas/{id}/correlations/self.
+// Records are positional tuples per Schema.Properties[*].Name: id, name,
+// instrumentType, region, universe, correlation, sharpe, returns, turnover,
+// fitness, margin. Min/Max are server-computed aggregates across the records.
+//
+// Gate SubmitAlpha on *Max < 0.7: BRAIN rejects on the SELF_CORRELATION check
+// at correlation >= 0.7, and that verdict only appears after a daily submit
+// slot has been burned.
+type SelfCorrelationBlock struct {
+	RecordSetBlock
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+}
+
 // RecordSchema describes the columnar shape of RecordSetBlock.Records.
 type RecordSchema struct {
 	Name       string           `json:"name,omitempty"`
