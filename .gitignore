@@ -19,3 +19,51 @@ testdata/test-accounts/
 # AI tooling (locally generated)
 .serena/
 AGENTS.md
+
+# Defense-in-depth: catch sensitive material that doesn't fit any of the
+# specific paths above. None of these patterns describe a file that
+# currently exists in the repo — they're pre-emptive guards so a future
+# stray secret, key, log, or backup can't sneak in via `git add -A`.
+
+# Logs may contain Set-Cookie / Authorization headers or request bodies.
+*.log
+**/*.log
+
+# TLS / crypto material.
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SSH private keys (common fat-finger paste targets).
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+
+# Auth tokens / netrc.
+*.token
+.netrc
+
+# Generic secrets-file naming conventions.
+secrets.yaml
+secrets.yml
+secrets.json
+secrets.toml
+
+# Editor / sed backups (may contain unredacted intermediate state).
+*.bak
+*.tmp
+*.orig
+*.old
+
+# Cloud provider credential directories.
+.aws/
+.gcp/
+.azure/
+
+# Windows system noise (not sensitive, just clutter).
+Thumbs.db
+desktop.ini
