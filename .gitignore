@@ -13,6 +13,9 @@ cookies-*.json
 .env
 .env.local
 
+# End-to-end test credentials mirrored from the reference project — NEVER commit
+testdata/test-accounts/
+
 # AI tooling (locally generated)
 .serena/
 AGENTS.md
