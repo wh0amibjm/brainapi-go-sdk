@@ -249,9 +249,14 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 }
 
 // AlphaSelfCorrelation calls GET /alphas/{id}/correlations/self and long-polls
-// (503 = queued, 200 = terminal) until BRAIN returns the top-N most-correlated
-// already-submitted alphas plus min/max aggregates. Cached server-side after
-// the first run per alpha; subsequent calls return 200 immediately.
+// until BRAIN returns the top-N most-correlated already-submitted alphas plus
+// min/max aggregates. Cached server-side after the first run per alpha;
+// subsequent calls return 200 immediately.
+//
+// "Still computing" is signaled two ways depending on account tier — 503 with
+// Retry-After (observed on Conditional-Consultant) or 200 with empty body and
+// Retry-After (observed on TUTORIAL secondary accounts). Both hints are set so the
+// transport retries either signal.
 //
 // Use BEFORE SubmitAlpha: if *block.Max >= 0.7 the alpha will be rejected by
 // the post-submit SELF_CORRELATION check and burn a DailyBudget.Submits slot
@@ -266,7 +271,7 @@ func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorr
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
 		path:   "/alphas/" + id + "/correlations/self",
-		hints:  retryHints{longPoll503: true},
+		hints:  retryHints{longPoll503: true, longPoll200Empty: true},
 	})
 	if err != nil {
 		return nil, err
