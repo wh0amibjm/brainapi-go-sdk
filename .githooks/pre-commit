@@ -21,4 +21,4 @@ if ! command -v pre-commit >/dev/null 2>&1; then
     exit 1
 fi
 
-exec pre-commit run --hook-stage commit
+exec pre-commit run

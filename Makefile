@@ -64,15 +64,18 @@ tidy: ## go mod tidy
 clean: ## Remove build artifacts (cross-platform via Go stdlib)
 	@go run ./internal/tools/clean
 
-install-hooks: ## Install pre-commit hooks (uses .githooks/)
+install-hooks: ## Install pre-commit hooks (sets core.hooksPath=.githooks/)
+	@if ! command -v pre-commit >/dev/null 2>&1; then \
+		echo "ERROR: pre-commit framework is required by .githooks/pre-commit wrapper."; \
+		echo "  Install: pip install pre-commit  (or  uvx pre-commit), then re-run."; \
+		exit 1; \
+	fi
 	git config core.hooksPath .githooks
 	@echo "core.hooksPath set to .githooks (uninstall: git config --unset core.hooksPath)"
-	@if command -v pre-commit >/dev/null 2>&1; then \
-		pre-commit install --hook-type pre-commit --hook-type commit-msg; \
-	else \
-		echo "WARNING: pre-commit framework not installed; .githooks/pre-commit will fail."; \
-		echo "  Install: pip install pre-commit  (or  uvx pre-commit), then re-run make install-hooks."; \
-	fi
+	@echo "Active hooks: .githooks/{pre-commit, commit-msg, pre-push}"
+	@echo "  pre-commit delegates to pre-commit framework (.pre-commit-config.yaml)."
+	@echo "  commit-msg enforces Conventional Commits 1.0."
+	@echo "  pre-push runs full -race tests + 5-target cross-compile smoke."
 
 test-register: ## Live: register a fresh @example.com account, login, persist creds. Burns a real BRAIN registration.
 	@go run ./scripts/register
