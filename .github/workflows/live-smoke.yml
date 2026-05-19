@@ -75,7 +75,7 @@ jobs:
           BRAINAPI_USER=... BRAINAPI_PASS=... go run ./scripts/live-smoke
           \`\`\`
 
-          The failing step is logged on stderr (line prefixed \`N/9 ... FAILED\`).
+          The failing step is logged on stderr (line prefixed \`N/13 ... FAILED\`).
 
           ### Triage
 
