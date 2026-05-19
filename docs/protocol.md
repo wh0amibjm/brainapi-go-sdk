@@ -78,6 +78,20 @@ There are two envelope types:
 - `"DAILY"`: includes `yesterday`, `current`, `previous`, `ytd`, `total` summary blocks (used by base-payment, simulations, submissions).
 - `"LIST"`: only `total`; records can have heterogeneous types (used by other-payment).
 
+### Forward-compatibility: five metadata fields are `json.RawMessage`
+
+BRAIN has a history of silently retyping metadata fields from `string` to structured objects (caught live during the v0.1.1 the TypeScript client integration). The SDK pre-emptively types these as `json.RawMessage` so the wire shape never breaks the parser:
+
+| Field | First-observed reshape |
+|---|---|
+| `Alpha.Team` | string → `{id, type, name, university}` (2026-05-18) |
+| `Competition.Team` | same drift, same date |
+| `Alpha.Color` | defensive — same `*string` metadata pattern as Team |
+| `Alpha.Category` | defensive — same |
+| `Leaderboard.University` | defensive — peer of Team in the same struct family |
+
+Callers that need typed access can `json.Unmarshal(field, &dst)` against whatever shape BRAIN is currently returning. Wrapper authors in other languages should type these as `unknown` / `any` and decode lazily.
+
 ### Schema endpoint shapes diverge
 
 - `GET /operators` → bare JSON array (no envelope).

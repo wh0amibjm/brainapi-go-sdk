@@ -34,6 +34,9 @@ brainapi auth probe
 # Fetch an alpha
 brainapi alphas get qMPjAxnO
 
+# Pre-submit correlation gate (free of submit-budget cost; threshold 0.7)
+brainapi alphas corr qMPjAxnO | jq '.data.max'
+
 # Submit and wait for verdict (long-polls until terminal)
 brainapi alphas submit qMPjAxnO | jq .data
 
@@ -165,6 +168,7 @@ These caveats — captured by Chrome DevTools auditing against `platform.worldqu
 - **`Retry-After` is a float-second string** (`"5.0"`), not an int. Parsed via `strconv.ParseFloat`; clamped to `[1s, 120s]` for 429 and `[0.5s, 30s]` for 503 long-polls.
 - **`POST /alphas/{id}/check` returns 405** — GET-only, long-polls on 200 + empty body + Retry-After.
 - **SELF_CORRELATION verdict only comes from `/alphas/{id}/submit` long-poll**, never from `GET /alphas/{id}` (which stays `result: "PENDING"` indefinitely for unsubmitted alphas).
+- **`GET /alphas/{id}/correlations/self` is the pre-submit corr gate** and signals "still computing" two ways depending on account tier: `503 + Retry-After` (Conditional-Consultant) or `200 + empty body + Retry-After` (TUTORIAL). The SDK opts into both `longPoll503` and `longPoll200Empty` so the transport retries either signal — without this dual path, fresh-alpha first calls misleadingly return `long_poll_exceeded`. Gate `SubmitAlpha` on `*block.Max < 0.7` (same threshold BRAIN's post-submit `SELF_CORRELATION` check uses) to avoid wasting daily submit slots on guaranteed-fail submissions.
 - **`POST /alphas/{id}/submit` returns 503** for the *acceptance*, not the failure — the SDK treats it as "queued" and proceeds to GET-poll.
 - **`GET /operators`** returns a bare JSON array; **`GET /data-fields`** uses `{count, results}` (no next/previous); **`GET /users/self/alphas`** uses the full Django REST envelope. Three different shapes — handled per endpoint.
 - **Activity `records.records` are positional tuples**, not dicts. Use `DecodeActivities` to convert via the `schema.properties` column map.

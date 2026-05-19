@@ -245,4 +245,10 @@ var staticContracts = []contractSpec{
 		Summary: "Three different shapes: GET /operators returns a bare JSON array; GET /data-fields returns {count,results}; GET /users/self/alphas returns full DRF {count,next,previous,results}.",
 		Ref:     "docs/sdk-protocol.md",
 	},
+	{
+		ID:      "register-payload",
+		Topic:   "register",
+		Summary: "POST /users body uses education.graduationYear (NOT gradYear) and has no address.zip — live-confirmed 2026-05-19. Education.degree must be BACHELORS / MASTERS / ASSOCIATE. The SDK auto-fetches /captcha and injects the solved Altcha PoW into auxiliary.captcha when empty.",
+		Ref:     "docs/protocol.md",
+	},
 }

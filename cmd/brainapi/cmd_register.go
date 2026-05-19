@@ -14,6 +14,30 @@ func newRegisterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "register --json <file|->",
 		Short: "POST /users: register a secondary account. Captcha auto-solved via Altcha PoW.",
+		Long: `Register a secondary account via POST /users. The Altcha PoW captcha is
+auto-solved by the SDK's parallel SHA-256 solver and injected into
+auxiliary.captcha — no manual challenge handling required.
+
+Minimal valid RegisterInput (note: graduationYear, NOT gradYear; no address.zip):
+
+  {
+    "email":     "you@example.com",
+    "firstName": "Test",
+    "lastName":  "Account",
+    "fullName":  "Test Account",
+    "gender":    "MALE",
+    "address":   {"country": "US"},
+    "education": {"university": "MIT", "major": "CS", "degree": "BACHELORS", "graduationYear": 2026},
+    "auxiliary": {"password": "S3cure!!"}
+  }
+
+Education.degree must be one of BACHELORS / MASTERS / ASSOCIATE — BRAIN
+rejects other values with a DRF validation error. See docs/protocol.md
+for the full field list and the SendGrid email-verify caveat.
+
+End-to-end live test: scripts/register (also reachable via
+` + "`make test-register`" + `) auto-generates a @example.com account and
+exercises register -> login -> probe -> self.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if jsonFlag == "" {
 				writeErr(fmt.Errorf("--json is required (RegisterInput body)"))
