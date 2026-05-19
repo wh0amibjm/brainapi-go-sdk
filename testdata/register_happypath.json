@@ -1,0 +1,20 @@
+{
+  "_comment": "Golden RegisterInput body — mirrors what TestRegister_HappyPath posts. Must use education.graduationYear (NOT gradYear) and have no address.zip — live-confirmed against BRAIN 2026-05-19. Education.degree must be one of BACHELORS / MASTERS / ASSOCIATE; auxiliary.captcha is auto-filled by the SDK when empty.",
+  "email": "newsub@x.com",
+  "firstName": "F",
+  "lastName": "L",
+  "fullName": "FL",
+  "gender": "MALE",
+  "address": {
+    "country": "US"
+  },
+  "education": {
+    "university": "MIT",
+    "major": "CS",
+    "degree": "BACHELORS",
+    "graduationYear": 2020
+  },
+  "auxiliary": {
+    "password": "pw"
+  }
+}
