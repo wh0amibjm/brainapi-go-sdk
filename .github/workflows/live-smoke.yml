@@ -29,6 +29,10 @@ permissions:
 
 env:
   GO_VERSION: "1.26"
+  # Opt in early so we move off Node 20 before GitHub flips the default
+  # on 2026-06-02; lets us keep actions/checkout@v4 + actions/setup-go@v5
+  # without absorbing v4->v5 / v5->v6 breaking-change risk in the same PR.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   smoke:

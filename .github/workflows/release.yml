@@ -8,6 +8,13 @@ on:
 permissions:
   contents: write
 
+env:
+  # Opt in early so we move off Node 20 before GitHub flips the default
+  # on 2026-06-02; lets us keep actions/checkout@v4 + actions/setup-go@v5
+  # + softprops/action-gh-release@v2 without absorbing version-bump
+  # breaking-change risk in the same PR.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   release:
     runs-on: ubuntu-latest
