@@ -426,15 +426,16 @@ type Address struct {
 	State   string `json:"state,omitempty"`
 	City    string `json:"city,omitempty"`
 	Street  string `json:"street,omitempty"`
-	Zip     string `json:"zip,omitempty"`
 }
 
-// Education is a sub-object of RegisterInput.
+// Education is a sub-object of RegisterInput. Degree must be one of
+// BACHELORS / MASTERS / ASSOCIATE — BRAIN rejects other values with
+// `"\"X\" is not a valid choice."` (live-confirmed 2026-05-19).
 type Education struct {
-	University string `json:"university"`
-	Major      string `json:"major"`
-	Degree     string `json:"degree"`
-	GradYear   int    `json:"gradYear"`
+	University     string `json:"university"`
+	Major          string `json:"major"`
+	Degree         string `json:"degree"`
+	GraduationYear int    `json:"graduationYear"`
 }
 
 // Auxiliary is the sub-object of RegisterInput. Captcha is auto-populated

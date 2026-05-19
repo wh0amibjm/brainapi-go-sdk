@@ -48,7 +48,7 @@ func TestRegister_HappyPath(t *testing.T) {
 	in := brainapi.RegisterInput{
 		Email: "newsub@x.com", FirstName: "F", LastName: "L", FullName: "FL", Gender: "MALE",
 		Address:   brainapi.Address{Country: "US"},
-		Education: brainapi.Education{University: "MIT", Major: "CS", Degree: "BACHELORS", GradYear: 2020},
+		Education: brainapi.Education{University: "MIT", Major: "CS", Degree: "BACHELORS", GraduationYear: 2020},
 		Auxiliary: brainapi.Auxiliary{Password: "pw"},
 	}
 	if _, err := cl.Register(ctx, in); err != nil {
@@ -65,6 +65,20 @@ func TestRegister_HappyPath(t *testing.T) {
 	aux, _ := posted["auxiliary"].(map[string]any)
 	if aux == nil || aux["captcha"] != captchaPayload {
 		t.Errorf("captcha not injected: posted body=%s", string(capturedBody))
+	}
+	// Regression: BRAIN's POST /users rejects address.zip ("Unexpected
+	// property") and requires education.graduationYear (NOT gradYear).
+	// Live-confirmed 2026-05-19 — see docs/protocol.md.
+	addr, _ := posted["address"].(map[string]any)
+	if _, has := addr["zip"]; has {
+		t.Errorf("posted address must not include zip: %v", addr)
+	}
+	edu, _ := posted["education"].(map[string]any)
+	if _, has := edu["gradYear"]; has {
+		t.Errorf("posted education must use graduationYear, not gradYear: %v", edu)
+	}
+	if _, has := edu["graduationYear"]; !has {
+		t.Errorf("posted education missing graduationYear: %v", edu)
 	}
 }
 
