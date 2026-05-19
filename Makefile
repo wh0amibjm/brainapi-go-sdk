@@ -68,7 +68,7 @@ install-hooks: ## Install pre-commit hooks (uses .githooks/)
 	git config core.hooksPath .githooks
 	@echo "core.hooksPath set to .githooks (uninstall: git config --unset core.hooksPath)"
 	@if command -v pre-commit >/dev/null 2>&1; then \
-		pre-commit install; \
+		pre-commit install --hook-type pre-commit --hook-type commit-msg; \
 	else \
 		echo "WARNING: pre-commit framework not installed; .githooks/pre-commit will fail."; \
 		echo "  Install: pip install pre-commit  (or  uvx pre-commit), then re-run make install-hooks."; \

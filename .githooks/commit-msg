@@ -1,0 +1,53 @@
+#!/usr/bin/env sh
+# Validates the commit message subject against Conventional Commits 1.0
+# (https://www.conventionalcommits.org/). The project git log is 100%
+# compliant with `type(scope): subject`; this gate keeps it that way so
+# release tooling, CHANGELOG generation, and visual scanning stay reliable.
+#
+# Git-generated subjects (merges, reverts, fixups, squashes, amends) are
+# skipped because git produces them itself in a non-Conventional shape.
+#
+# Subject length is capped at 72 chars so `git log --oneline` stays
+# readable in 80-column terminals.
+
+set -e
+
+msg_file="$1"
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+    echo "[commit-msg] usage: $0 <path-to-commit-msg-file>" >&2
+    exit 2
+fi
+
+# Strip leading comment lines git inserts (`# Please enter the commit message...`).
+first_line="$(grep -v '^#' "$msg_file" | sed '/./,$!d' | head -n1)"
+
+if [ -z "$first_line" ]; then
+    echo "[commit-msg] commit message is empty" >&2
+    exit 1
+fi
+
+# Skip git-generated subjects that don't fit the format by design.
+case "$first_line" in
+    "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"amend!"*) exit 0 ;;
+esac
+
+# Allowed type set is intentionally finite -- broader is a smell. Scope is
+# optional, lowercase alphanumeric plus a small punctuation set. Trailing
+# `!` marks a breaking change per Conventional Commits 1.0.
+pattern='^(feat|fix|docs|chore|refactor|test|perf|ci|build|revert|style)(\([a-z0-9_./,-]+\))?!?: .{1,72}$'
+
+if ! printf '%s' "$first_line" | grep -E "$pattern" >/dev/null; then
+    cat >&2 <<EOF
+[commit-msg] subject does not match Conventional Commits 1.0.
+
+Got:      $first_line
+Expected: <type>(<optional-scope>): <subject up to 72 chars>
+Types:    feat fix docs chore refactor test perf ci build revert style
+Breaking: append ! before the colon  (feat!: ... or feat(scope)!: ...)
+Example:  feat(scripts): add register canary
+
+Bypass for git-generated merges/reverts/fixups is automatic; everything
+else must match.
+EOF
+    exit 1
+fi
