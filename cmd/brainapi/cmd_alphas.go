@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ func newAlphasCmd() *cobra.Command {
 		newAlphaSubmitCmd(),
 		newAlphaPnLCmd(),
 		newAlphaCorrCmd(),
+		newAlphaCorrLocalCmd(),
 		newAlphaListCmd(),
 	)
 	return cmd
@@ -118,6 +120,39 @@ func newAlphaCorrCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newAlphaCorrLocalCmd() *cobra.Command {
+	var jsonFlag string
+	cmd := &cobra.Command{
+		Use:   "corr-local --json <file|->",
+		Short: "Local self-correlation (offline, no BRAIN call): Pearson over trailing-4y PnL returns of a candidate vs supplied neighbours",
+		Long: "Compute self-correlation OFFLINE from PnL series you already have — a pure-Go port of the the TypeScript client reference path, mirroring GET /alphas/{id}/correlations/self.\n\n" +
+			"Body (--json file path or '-' for stdin):\n" +
+			`  {"candidate":{"id":"X","records":[["2020-01-02",1234.5],...]},` + "\n" +
+			`   "neighbours":[{"id":"Y","records":[["2020-01-02",10.0],...]},...]}` + "\n\n" +
+			"records are [date, cumulativePnl] tuples (same shape as `alphas pnl`). Both candidate and neighbours are trimmed to the trailing 4 years and converted to daily returns; any neighbour whose id equals the candidate's is excluded. Output: {corrMax, neighbours:[{id,corr,overlap}], considered, skipped}. corrMax is signed and ranked by |corr|; gate submission on |corrMax| < 0.7.",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if jsonFlag == "" {
+				writeErr(fmt.Errorf("--json is required"))
+				return nil
+			}
+			body, err := readBody(jsonFlag)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			var in brainapi.SelfCorrLocalInput
+			if err := json.Unmarshal(body, &in); err != nil {
+				writeErr(fmt.Errorf("parse corr-local body: %w", err))
+				return nil
+			}
+			writeOK(brainapi.SelfCorrLocal(in))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&jsonFlag, "json", "", "Candidate + neighbours JSON: file path or '-' for stdin")
+	return cmd
 }
 
 func newAlphaPnLCmd() *cobra.Command {

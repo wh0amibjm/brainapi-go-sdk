@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Offline self-correlation.** `brainapi.SelfCorrLocal(in)` and the
+  `brainapi alphas corr-local --json <file|->` command compute self-correlation
+  with NO BRAIN call — a pure-Go port of the the TypeScript client reference path,
+  mirroring `/alphas/{id}/correlations/self` (Pearson over the trailing-4y
+  daily-PnL-return window, on the date-intersection of each pair; signed max,
+  ranked by `|corr|`; neighbours below 30-day overlap counted as `skipped`).
+  Input is `{candidate, neighbours}` where each is `{id, records:[[date,pnl]…]}`
+  (same tuple shape as `alphas pnl`); the candidate's own id is excluded from
+  the neighbour set. Constants (4-year window, 30-day min overlap, top-5) are
+  hardcoded to match BRAIN's validated semantics. Unlike `alphas corr`, this
+  works on PnL that is NOT YET a main-account alpha and serves as a drift
+  cross-check / offline fallback for the server-side endpoint.
+
 ## [0.2.0] - 2026-05-19
 
 ### Added
