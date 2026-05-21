@@ -27,6 +27,8 @@ const WRAPPED = new Set<string>([
   'alphas check',
   'alphas submit',
   'alphas pnl',
+  'alphas corr',
+  'alphas corr-local',
   'alphas list',
   'simulations create',
   'simulations get',

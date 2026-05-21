@@ -13,7 +13,10 @@ import type {
   DecodedActivityStream,
   DescribeSpec,
   ListAlphasOpts,
+  MaxSelfCorrResult,
   ProbeInfo,
+  SelfCorrelationBlock,
+  SelfCorrLocalInput,
   SimulationRequest,
   SimulationSettings,
   SimulationStatus,
@@ -67,6 +70,14 @@ export class Client {
   checkAlpha = (id: string): Promise<unknown> => this.run<unknown>(['alphas', 'check', id]);
   submitAlpha = (id: string): Promise<Verdict> => this.run<Verdict>(['alphas', 'submit', id]);
   alphaPnl = (id: string): Promise<unknown> => this.run<unknown>(['alphas', 'pnl', id]);
+  // Server-side self-corr: GET /alphas/{id}/correlations/self. Gate submission
+  // on `max < 0.7`.
+  alphaCorr = (id: string): Promise<SelfCorrelationBlock> =>
+    this.run<SelfCorrelationBlock>(['alphas', 'corr', id]);
+  // Offline self-corr: compute locally from supplied candidate + neighbour PnL,
+  // no BRAIN call. Works on PnL that isn't yet a main-account alpha.
+  alphaCorrLocal = (input: SelfCorrLocalInput): Promise<MaxSelfCorrResult> =>
+    this.run<MaxSelfCorrResult>(['alphas', 'corr-local', '--json', '-'], JSON.stringify(input));
   listAlphas = (opts: ListAlphasOpts = {}): Promise<AlphasPage> => {
     const args = ['alphas', 'list'];
     if (opts.status) args.push('--status', opts.status);

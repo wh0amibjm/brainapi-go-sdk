@@ -1,6 +1,6 @@
 {
   "name": "@wh0amibjm/brainapi",
-  "version": "0.1.2",
+  "version": "0.3.0",
   "description": "TypeScript client for the brainapi CLI (WorldQuant BRAIN platform API)",
   "type": "module",
   "main": "./dist/index.cjs",

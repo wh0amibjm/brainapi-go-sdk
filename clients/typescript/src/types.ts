@@ -132,6 +132,45 @@ export interface Verdict {
   http?: number;
 }
 
+// ---------- self-correlation ----------
+
+// Server-side GET /alphas/{id}/correlations/self (`alphas corr`). Embeds the
+// record-set block; min/max are null for fresh accounts with no submitted peers.
+export interface SelfCorrelationBlock {
+  schema?: unknown;
+  records?: unknown[];
+  min?: number | null;
+  max?: number | null;
+}
+
+// One alpha's id + cumulative-PnL series for `alphas corr-local`. records are
+// [date, cumulativePnl] tuples — the same shape `alphas pnl` emits.
+export interface AlphaPnLInput {
+  id: string;
+  records: Array<[string, number]>;
+}
+
+// Input body for offline self-correlation (`alphas corr-local`).
+export interface SelfCorrLocalInput {
+  candidate: AlphaPnLInput;
+  neighbours: AlphaPnLInput[];
+}
+
+export interface CorrNeighbour {
+  id: string;
+  corr: number;
+  overlap: number;
+}
+
+// Result of `alphas corr-local`. corrMax is signed, ranked by |corr|; skipped
+// counts neighbours dropped for < 30-day date overlap.
+export interface MaxSelfCorrResult {
+  corrMax: number;
+  neighbours: CorrNeighbour[];
+  considered: number;
+  skipped: number;
+}
+
 export interface ListAlphasOpts {
   status?: 'ACTIVE' | 'UNSUBMITTED' | 'DECOMMISSIONED';
   order?: string;
