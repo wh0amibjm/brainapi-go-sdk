@@ -24,8 +24,8 @@ type CaptchaSolver interface {
 }
 
 // DailyBudget is the in-process daily quota gate. Counters reset at the
-// next BRAIN day boundary (3 AM ET). Set Sims or Submits to 0 to disable
-// the gate for that operation type.
+// next BRAIN day boundary (ET midnight; 3 AM ET is only the data refresh).
+// Set Sims or Submits to 0 to disable the gate for that operation type.
 type DailyBudget struct {
 	Sims    int
 	Submits int
@@ -296,16 +296,16 @@ func (c *Client) checkBudget(kind string) error {
 	return nil
 }
 
-// challengeDayStr returns the BRAIN challenge-day string. BRAIN's day rolls
-// over at 3 AM US/Eastern, not midnight UTC and not midnight local. Mirrors
-// the TS helper of the same name.
+// challengeDayStr returns the BRAIN challenge-day string: each submission is
+// attributed to its EDT (fixed UTC-4) calendar day by the MIDNIGHT (00:00)
+// boundary — NOT DST-aware Eastern, so the boundary stays at 04:00 UTC all
+// year (no EST fallback in winter). BRAIN's own dateSubmitted carries an
+// explicit -04:00 offset confirming this. The 3 AM ET event is only the
+// challenge / paybasement DATA refresh, NOT the day-attribution boundary — an
+// earlier -3h shift here mis-filed every 00:00–03:00 EDT call into the
+// previous day. Mirrors the TS helper brainDay().
 func challengeDayStr(now time.Time) string {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		loc = time.UTC
-	}
-	et := now.In(loc).Add(-3 * time.Hour)
-	return et.Format("2006-01-02")
+	return now.UTC().Add(-4 * time.Hour).Format("2006-01-02")
 }
 
 // joinURL builds an absolute URL from a path/qs pair under c.baseURL.

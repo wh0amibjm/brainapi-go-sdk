@@ -13,7 +13,7 @@ var (
 	ErrNotAuthenticated = errors.New("brainapi: not authenticated")
 
 	// ErrDailyBudgetExhausted means the in-process daily budget gate refused
-	// the call. The counter resets at the next 3am-ET BRAIN day boundary.
+	// the call. The counter resets at the next ET-midnight BRAIN day boundary.
 	ErrDailyBudgetExhausted = errors.New("brainapi: daily budget exhausted")
 
 	// ErrCooldown means a recent rate-limit or "concurrent simulation" response

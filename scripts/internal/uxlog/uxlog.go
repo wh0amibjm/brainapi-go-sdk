@@ -89,7 +89,7 @@ func HintForError(err error) string {
 		return "BRAIN sends verify links via SendGrid wrapper; resolution needs a US residential IP. Account is already TUTORIAL-approved without this step."
 	}
 	if errors.Is(err, brainapi.ErrDailyBudgetExhausted) {
-		return "Daily budget exhausted; resets at the next 3 AM US/Eastern boundary."
+		return "Daily budget exhausted; resets at the next ET-midnight (US/Eastern) BRAIN day boundary."
 	}
 	if errors.Is(err, brainapi.ErrLongPollExceeded) {
 		return "Long-poll cap exceeded; raise MaxLongPolls or re-run once BRAIN has warmed its cache."
