@@ -394,6 +394,39 @@ type ListAlphasOptions struct {
 	Order  string // "-dateCreated" etc.
 }
 
+// Message is one item of GET /users/self/messages results[] — the feed behind
+// the BRAIN platform notification center
+// (platform.worldquantbrain.com/messages/notifications). Field set
+// live-confirmed 2026-05-27.
+//
+// The web UI splits the feed into two tabs that map 1:1 to Type: "Announcements"
+// (Type=="ANNOUNCEMENT") and "Notifications" (Type=="NOTIFICATION"). Dataset
+// releases — the high-value "new dataset" notices — arrive as ANNOUNCEMENT
+// messages identified by Title (e.g. "📢 Launching a new dataset …"); there is
+// no dedicated type or tag for them, so callers filter on Title client-side.
+//
+// Description is rendered HTML. It is short in practice (≤ ~2 KB observed) but
+// MAY embed base64 data-URI <img> tags that run to several MB; callers piping
+// it into size-sensitive sinks (LLM prompts, logs) should strip or summarize
+// it. The SDK transports it verbatim.
+type Message struct {
+	ID          string   `json:"id"`
+	Type        string   `json:"type"` // "ANNOUNCEMENT" | "NOTIFICATION" (full set, live-confirmed)
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	DateCreated string   `json:"dateCreated"`
+	Tags        []string `json:"tags"`
+	Read        bool     `json:"read"`
+}
+
+// ListMessagesOptions configures GET /users/self/messages.
+type ListMessagesOptions struct {
+	Type   string // "ANNOUNCEMENT" | "NOTIFICATION"; empty = all types (server accepts no filter)
+	Limit  int    // BRAIN's web client uses 10
+	Offset int
+	Order  string // "-dateCreated" etc.
+}
+
 // DataFieldsQuery configures GET /data-fields. All four core fields are
 // REQUIRED — BRAIN returns 400 if any is missing.
 type DataFieldsQuery struct {

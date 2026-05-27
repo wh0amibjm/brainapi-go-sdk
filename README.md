@@ -121,6 +121,7 @@ Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CL
 | `GET /users/self` | `Client.Self` | `users self` | [self](testdata/users_self.json) |
 | `GET /users/self/competitions` | `Client.Competitions` | `users competitions` | [competitions](testdata/competitions.json) |
 | `GET /users/self/activities/{kind}` | `Client.Activities` + `DecodeActivities` | `users activities` | [simulations (DAILY)](testdata/activities_simulations.json) / [other-payment empty (LIST)](testdata/activities_other_payment_empty.json) |
+| `GET /users/self/messages` | `Client.Messages` / `MessagesAll` | `messages list [--all]` | [page](testdata/messages.json) |
 | `GET /operators` | `Client.Operators` | `schema operators` | [operators](testdata/operators.json) |
 | `GET /data-fields` | `Client.DataFields` / `DataFieldsAll` | `schema data-fields [--all]` | [page](testdata/data_fields_page.json) |
 | `POST /users` | `Client.Register` | `register` | _(register success path varies — see captcha leg)_ |

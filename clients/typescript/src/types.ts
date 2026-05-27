@@ -179,6 +179,38 @@ export interface ListAlphasOpts {
   all?: boolean;
 }
 
+// One item of GET /users/self/messages — the notification-center feed.
+// `type` is "ANNOUNCEMENT" (platform announcements, incl. new-dataset notices)
+// or "NOTIFICATION" (per-user events, e.g. achievements) — live-confirmed full
+// set. Dataset releases arrive as ANNOUNCEMENT messages identified by `title`
+// (e.g. "📢 Launching a new dataset …"); filter on title client-side.
+// `description` is rendered HTML that may embed large base64 data-URI images;
+// strip it before feeding to size-sensitive sinks.
+export interface Message {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  dateCreated: string;
+  tags: string[];
+  read: boolean;
+}
+
+export interface MessagesPage {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: Message[];
+}
+
+export interface ListMessagesOpts {
+  type?: string;
+  order?: string;
+  limit?: number;
+  offset?: number;
+  all?: boolean;
+}
+
 export type ActivityKind = 'base-payment' | 'other-payment' | 'simulations' | 'submissions';
 
 export interface ActivityPeriod {

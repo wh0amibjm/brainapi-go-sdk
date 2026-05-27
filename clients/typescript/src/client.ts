@@ -13,7 +13,9 @@ import type {
   DecodedActivityStream,
   DescribeSpec,
   ListAlphasOpts,
+  ListMessagesOpts,
   MaxSelfCorrResult,
+  MessagesPage,
   ProbeInfo,
   SelfCorrelationBlock,
   SelfCorrLocalInput,
@@ -86,6 +88,19 @@ export class Client {
     if (typeof opts.offset === 'number') args.push('--offset', String(opts.offset));
     if (opts.all) args.push('--all');
     return this.run<AlphasPage>(args);
+  };
+
+  // ---------- messages ----------
+  // GET /users/self/messages: notification feed (announcements, dataset
+  // updates, ...). Pass `type` to filter; `all` drains every page.
+  listMessages = (opts: ListMessagesOpts = {}): Promise<MessagesPage> => {
+    const args = ['messages', 'list'];
+    if (opts.type) args.push('--type', opts.type);
+    if (opts.order) args.push('--order', opts.order);
+    if (typeof opts.limit === 'number') args.push('--limit', String(opts.limit));
+    if (typeof opts.offset === 'number') args.push('--offset', String(opts.offset));
+    if (opts.all) args.push('--all');
+    return this.run<MessagesPage>(args);
   };
 
   // ---------- simulations ----------

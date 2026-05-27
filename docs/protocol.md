@@ -22,6 +22,7 @@ Source of truth: `the protocol captures under testdata/` (13 spec files, Chrome-
 | GET | `/users/self/competitions` | `Client.Competitions` |
 | GET | `/users/self/alphas` | `Client.ListAlphas` / `ListAlphasAll` |
 | GET | `/users/self/activities/{kind}` | `Client.Activities` |
+| GET | `/users/self/messages` | `Client.Messages` / `MessagesAll` |
 | GET | `/alphas/{id}` | `Client.GetAlpha` |
 | GET | `/alphas/{id}/check` | `Client.CheckAlpha` |
 | POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
@@ -77,6 +78,18 @@ There are two envelope types:
 
 - `"DAILY"`: includes `yesterday`, `current`, `previous`, `ytd`, `total` summary blocks (used by base-payment, simulations, submissions).
 - `"LIST"`: only `total`; records can have heterogeneous types (used by other-payment).
+
+### `/users/self/messages` is the notification-center feed
+
+This is the endpoint behind `platform.worldquantbrain.com/messages/notifications`. The SDK exposes it as `Client.Messages` (first page) and `Client.MessagesAll` (paginate all). Live-captured 2026-05-27 via the platform's own XHR (account `DH52706`).
+
+- **Query params:** `type` (filter), `order` (e.g. `-dateCreated`), `limit` (web client uses 10), `offset`. The SDK omits any param left empty; **omitting `type` returns all types in one feed** (verified 200, 43 rows).
+- **Envelope:** standard DRF `{count, next, previous, results}` (decoded as `Page[Message]`), same shape as `/users/self/alphas`.
+- **`Message` fields (complete):** `id`, `type`, `title`, `description`, `dateCreated`, `tags` (`[]string`, empty in practice), `read` (`bool`).
+- **`type` is a closed 2-value set** — the web UI's two tabs map 1:1 to it:
+  - `ANNOUNCEMENT` — platform-wide announcements (36 of 43 on the captured account). **This is where dataset releases live**, e.g. title `📢 Launching a new dataset for IQC 2026 participants`. There is **no dedicated `type` or `tag`** for dataset updates — filter on `Title` client-side.
+  - `NOTIFICATION` — per-user events (7 of 43), e.g. `Achievement Unlocked!`.
+- **`description` is short in practice but may embed base64 images.** On the captured account it was rendered HTML ≤ ~2 KB with no images. BRAIN's own clients defensively strip `<img src="data:image/...;base64,…">` payloads that can run to several MB, so don't assume it's small. The SDK transports it verbatim; strip/summarize before size-sensitive sinks (LLM prompts, logs).
 
 ### Forward-compatibility: five metadata fields are `json.RawMessage`
 

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Notification feed.** `Client.Messages(ctx, opts)` / `Client.MessagesAll(ctx, opts)`
+  and the `brainapi messages list` command wrap `GET /users/self/messages` — the
+  feed behind the BRAIN notification center
+  (`platform.worldquantbrain.com/messages/notifications`). Options mirror the
+  alpha list: `Type` (filter), `Order`, `Limit` (default 50), `Offset`; `--all` /
+  `MessagesAll` drain every DRF page. New `Message` type
+  (`id, type, title, description, dateCreated, tags, read`) and TS wrapper
+  `client.listMessages`. Endpoint + schema **live-confirmed 2026-05-27**:
+  `type` is a closed set of `ANNOUNCEMENT` (platform-wide, **where new-dataset
+  notices live** — title `📢 Launching a new dataset …`; no dedicated type/tag,
+  filter on title) and `NOTIFICATION` (per-user events, e.g. achievements);
+  omitting `type` returns all types. `description` is HTML that may embed
+  multi-MB base64 images — transported verbatim; strip before size-sensitive
+  use. See `docs/protocol.md`.
+
 ## [0.3.0] - 2026-05-21
 
 ### Added

@@ -23,6 +23,7 @@ const WRAPPED = new Set<string>([
   'users self',
   'users competitions',
   'users activities',
+  'messages list',
   'alphas get',
   'alphas check',
   'alphas submit',
