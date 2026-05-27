@@ -1,4 +1,4 @@
-// live-smoke runs thirteen minimum-budget calls against real BRAIN to
+// live-smoke runs fourteen minimum-budget calls against real BRAIN to
 // prove the Go SDK's TLS impersonation + protocol decoding still match
 // what BRAIN actually returns today. The CI scheduled workflow runs this
 // weekly so silent BRAIN-side schema upgrades (the v0.1.1/v0.1.2 class
@@ -18,7 +18,8 @@
 //  10. GET  /alphas/{first}/recordsets/pnl        (AlphaPnL)              — PnLSeries decode (skipped if empty)
 //  11. GET  /alphas/{first}/correlations/self     (AlphaSelfCorrelation)  — SelfCorrelationBlock — pre-submit gate (skipped if empty)
 //  12. GET  /data-fields                          (DataFields)            — DataFieldsPage / NamedRef
-//  13. POST /authentication/logout                (Logout)                — session teardown
+//  13. GET  /users/self/messages                  (Messages)              — Page[Message] notification feed (type/tags/read)
+//  14. POST /authentication/logout                (Logout)                — session teardown
 //
 // It does NOT submit alphas or run simulations (those consume daily
 // budget and have visible side effects against the main account).
@@ -41,7 +42,7 @@
 //
 // Exit codes:
 //
-//	0  all thirteen calls succeeded (steps 8-11 may legitimately skip on empty accounts)
+//	0  all fourteen calls succeeded (steps 8-11 may legitimately skip on empty accounts)
 //	1  any call failed (details in stderr)
 //	2  missing credentials
 //
@@ -72,7 +73,7 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	profile := brainapi.ProfileForEmail(email)
-	logger.Info("live-smoke starting", "email", uxlog.Redact(email), "profile", profile, "steps", 13)
+	logger.Info("live-smoke starting", "email", uxlog.Redact(email), "profile", profile, "steps", 14)
 
 	cl, err := brainapi.NewClient(brainapi.Options{
 		Profile:       profile,
@@ -95,82 +96,82 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	// 1/13 — login.
+	// 1/14 — login.
 	sess, err := cl.Login(ctx, email, pass)
 	if err != nil {
-		fail(logger, "1/13 Login", err)
+		fail(logger, "1/14 Login", err)
 		return
 	}
 	if sess.User == nil {
-		fail(logger, "1/13 Login", fmt.Errorf("no user record in session: %+v", sess))
+		fail(logger, "1/14 Login", fmt.Errorf("no user record in session: %+v", sess))
 		return
 	}
-	logger.Info("1/13 login ok", "user_id", sess.User.ID, "permissions", len(sess.Permissions))
+	logger.Info("1/14 login ok", "user_id", sess.User.ID, "permissions", len(sess.Permissions))
 
-	// 2/13 — probe.
+	// 2/14 — probe.
 	info, err := cl.Probe(ctx)
 	if err != nil {
-		fail(logger, "2/13 Probe", err)
+		fail(logger, "2/14 Probe", err)
 		return
 	}
 	if info.User.ID == "" {
-		fail(logger, "2/13 Probe", fmt.Errorf("empty user id from probe"))
+		fail(logger, "2/14 Probe", fmt.Errorf("empty user id from probe"))
 		return
 	}
-	logger.Info("2/13 probe ok", "user_id", info.User.ID, "expiry_seconds", info.Token.Expiry)
+	logger.Info("2/14 probe ok", "user_id", info.User.ID, "expiry_seconds", info.Token.Expiry)
 
-	// 3/13 — operators.
+	// 3/14 — operators.
 	ops, err := cl.Operators(ctx)
 	if err != nil {
-		fail(logger, "3/13 Operators", err)
+		fail(logger, "3/14 Operators", err)
 		return
 	}
 	if len(ops) == 0 {
-		fail(logger, "3/13 Operators", fmt.Errorf("operator catalog is empty"))
+		fail(logger, "3/14 Operators", fmt.Errorf("operator catalog is empty"))
 		return
 	}
-	logger.Info("3/13 operators ok", "count", len(ops), "first", ops[0].Name)
+	logger.Info("3/14 operators ok", "count", len(ops), "first", ops[0].Name)
 
-	// 4/13 — self (User struct).
+	// 4/14 — self (User struct).
 	user, err := cl.Self(ctx)
 	if err != nil {
-		fail(logger, "4/13 Self", err)
+		fail(logger, "4/14 Self", err)
 		return
 	}
 	if user.ID == "" {
-		fail(logger, "4/13 Self", fmt.Errorf("empty user id"))
+		fail(logger, "4/14 Self", fmt.Errorf("empty user id"))
 		return
 	}
-	logger.Info("4/13 self ok", "user_id", user.ID, "verified", user.Verified)
+	logger.Info("4/14 self ok", "user_id", user.ID, "verified", user.Verified)
 
-	// 5/13 — competitions. Exercises Competition.Team and Leaderboard.University
+	// 5/14 — competitions. Exercises Competition.Team and Leaderboard.University
 	// — both of which BRAIN silently upgraded from string to object on
 	// 2026-05-18, breaking SDK v0.1.0. This step is the canary.
 	comps, err := cl.Competitions(ctx)
 	if err != nil {
-		fail(logger, "5/13 Competitions", err)
+		fail(logger, "5/14 Competitions", err)
 		return
 	}
-	logger.Info("5/13 competitions ok", "count", comps.Count, "page_size", len(comps.Results))
+	logger.Info("5/14 competitions ok", "count", comps.Count, "page_size", len(comps.Results))
 
-	// 6/13 — activities (ActivityStream + RecordSetBlock heterogeneous tuples).
+	// 6/14 — activities (ActivityStream + RecordSetBlock heterogeneous tuples).
 	activ, err := cl.Activities(ctx, brainapi.ActivitySubmissions)
 	if err != nil {
-		fail(logger, "6/13 Activities", err)
+		fail(logger, "6/14 Activities", err)
 		return
 	}
-	logger.Info("6/13 activities ok", "type", string(activ.Type))
+	logger.Info("6/14 activities ok", "type", string(activ.Type))
 
-	// 7/13 — alphas list. Exercises Alpha.Team / Alpha.Color / Alpha.Category
+	// 7/14 — alphas list. Exercises Alpha.Team / Alpha.Color / Alpha.Category
 	// (the other half of the v0.1.1 schema-drift fix).
 	page, err := cl.ListAlphas(ctx, brainapi.ListAlphasOptions{Limit: 3})
 	if err != nil {
-		fail(logger, "7/13 ListAlphas", err)
+		fail(logger, "7/14 ListAlphas", err)
 		return
 	}
-	logger.Info("7/13 alphas list ok", "count", page.Count, "page_size", len(page.Results))
+	logger.Info("7/14 alphas list ok", "count", page.Count, "page_size", len(page.Results))
 
-	// 8-11/13 — per-alpha detail probes. Skipped (with warning) when the
+	// 8-11/14 — per-alpha detail probes. Skipped (with warning) when the
 	// account has no alphas yet — common for a fresh test account, not a
 	// regression. All four reuse the same first alpha so we exercise the
 	// full read-side decoding surface (Alpha / IsBlock / PnLSeries /
@@ -178,45 +179,45 @@ func main() {
 	if len(page.Results) > 0 {
 		first := page.Results[0].ID
 
-		// 8/13 — GetAlpha (single Alpha detail).
+		// 8/14 — GetAlpha (single Alpha detail).
 		a, err := cl.GetAlpha(ctx, first)
 		if err != nil {
-			fail(logger, "8/13 GetAlpha", err)
+			fail(logger, "8/14 GetAlpha", err)
 			return
 		}
-		logger.Info("8/13 alpha detail ok", "id", a.ID, "status", a.Status)
+		logger.Info("8/14 alpha detail ok", "id", a.ID, "status", a.Status)
 
-		// 9/13 — CheckAlpha (IsBlock decode — pre-submit deterministic gates).
+		// 9/14 — CheckAlpha (IsBlock decode — pre-submit deterministic gates).
 		ib, err := cl.CheckAlpha(ctx, first)
 		if err != nil {
-			fail(logger, "9/13 CheckAlpha", err)
+			fail(logger, "9/14 CheckAlpha", err)
 			return
 		}
-		logger.Info("9/13 check ok", "id", first, "checks", len(ib.Checks))
+		logger.Info("9/14 check ok", "id", first, "checks", len(ib.Checks))
 
-		// 10/13 — AlphaPnL (PnLSeries decode).
+		// 10/14 — AlphaPnL (PnLSeries decode).
 		pnl, err := cl.AlphaPnL(ctx, first)
 		if err != nil {
-			fail(logger, "10/13 AlphaPnL", err)
+			fail(logger, "10/14 AlphaPnL", err)
 			return
 		}
-		logger.Info("10/13 pnl ok", "id", first, "rows", len(pnl.Records))
+		logger.Info("10/14 pnl ok", "id", first, "rows", len(pnl.Records))
 
-		// 11/13 — AlphaSelfCorrelation. The pre-submit gate referenced by
+		// 11/14 — AlphaSelfCorrelation. The pre-submit gate referenced by
 		// the SubmitAlpha workflow; schema drift here would silently
 		// invalidate budget-spending decisions. Cached server-side so
 		// returns immediately on warm alphas.
 		sc, err := cl.AlphaSelfCorrelation(ctx, first)
 		if err != nil {
-			fail(logger, "11/13 AlphaSelfCorrelation", err)
+			fail(logger, "11/14 AlphaSelfCorrelation", err)
 			return
 		}
-		logger.Info("11/13 self-correlation ok", "id", first, "max", derefFloat(sc.Max), "min", derefFloat(sc.Min))
+		logger.Info("11/14 self-correlation ok", "id", first, "max", derefFloat(sc.Max), "min", derefFloat(sc.Min))
 	} else {
-		logger.Warn("8-11/13 alpha-detail steps SKIPPED — account has zero alphas (not a failure)")
+		logger.Warn("8-11/14 alpha-detail steps SKIPPED — account has zero alphas (not a failure)")
 	}
 
-	// 12/13 — data-fields (DataFieldsPage + NamedRef inside Category/Dataset/Subcategory).
+	// 12/14 — data-fields (DataFieldsPage + NamedRef inside Category/Dataset/Subcategory).
 	dfPage, err := cl.DataFields(ctx, brainapi.DataFieldsQuery{
 		InstrumentType: "EQUITY",
 		Region:         "USA",
@@ -225,20 +226,31 @@ func main() {
 		Limit:          3,
 	})
 	if err != nil {
-		fail(logger, "12/13 DataFields", err)
+		fail(logger, "12/14 DataFields", err)
 		return
 	}
-	logger.Info("12/13 data-fields ok", "count", dfPage.Count, "page_size", len(dfPage.Results))
+	logger.Info("12/14 data-fields ok", "count", dfPage.Count, "page_size", len(dfPage.Results))
 
-	// 13/13 — logout. MUST be last; invalidates the session cookie for any
+	// 13/14 — messages (notification feed). Exercises Page[Message] decode and
+	// the Message struct (type/tags/read), where new-dataset announcements
+	// surface. No type filter so the mixed ANNOUNCEMENT/NOTIFICATION stream is
+	// decoded. Empty on a fresh account — like alphas, absence is not a failure.
+	msgs, err := cl.Messages(ctx, brainapi.ListMessagesOptions{Limit: 3, Order: "-dateCreated"})
+	if err != nil {
+		fail(logger, "13/14 Messages", err)
+		return
+	}
+	logger.Info("13/14 messages ok", "count", msgs.Count, "page_size", len(msgs.Results))
+
+	// 14/14 — logout. MUST be last; invalidates the session cookie for any
 	// subsequent calls. Verifies session-teardown path didn't regress.
 	if err := cl.Logout(ctx); err != nil {
-		fail(logger, "13/13 Logout", err)
+		fail(logger, "14/14 Logout", err)
 		return
 	}
-	logger.Info("13/13 logout ok")
+	logger.Info("14/14 logout ok")
 
-	logger.Info("ALL 13 STEPS PASSED — TLS impersonation + 13-endpoint decoding verified against real BRAIN")
+	logger.Info("ALL 14 STEPS PASSED — TLS impersonation + 14-endpoint decoding verified against real BRAIN")
 }
 
 func fail(logger *slog.Logger, step string, err error) {

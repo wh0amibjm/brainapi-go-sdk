@@ -80,7 +80,7 @@ install-hooks: ## Install pre-commit hooks (sets core.hooksPath=.githooks/)
 test-register: ## Live: register a fresh @example.com account, login, persist creds. Burns a real BRAIN registration.
 	@go run ./scripts/register
 
-test-live-smoke: ## Live: 9-step read-only smoke. Requires BRAINAPI_USER/PASS pointing at a data-having secondary account.
+test-live-smoke: ## Live: 14-step read-only smoke. Requires BRAINAPI_USER/PASS pointing at a data-having secondary account.
 	@go run ./scripts/live-smoke
 
 help: ## Show this help
