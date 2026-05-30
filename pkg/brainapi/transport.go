@@ -39,6 +39,12 @@ func newTLSHTTP(profile BrowserProfile, proxy string, timeout time.Duration, jar
 		tls_client.WithTimeoutSeconds(int(timeout.Seconds())),
 		tls_client.WithClientProfile(tlsClientProfile(profile)),
 		tls_client.WithCookieJar(jar),
+		// BRAIN signals "submission still processing" with a 303 back to the
+		// same /submit URL whose Location carries an http:// scheme (+ :443) the
+		// h2 transport rejects ("http2: unsupported scheme"). Don't auto-follow;
+		// surface the 3xx so the submit long-poll treats it as a keep-polling
+		// tick (see Client.do + parseSubmitVerdict).
+		tls_client.WithNotFollowRedirects(),
 	}
 	if proxy != "" {
 		opts = append(opts, tls_client.WithProxyUrl(proxy))
@@ -356,6 +362,13 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 		}
 
 		switch {
+		case r.hints.accept503 && resp.status >= 300 && resp.status < 400:
+			// BRAIN's "accepted, still processing" poll signal is a 303 See Other
+			// back to the submit URL (+ Retry-After), NOT a real move. With redirect
+			// following disabled it lands here; hand it back so the SubmitAlpha
+			// long-poll keeps polling, exactly like the 503 case below.
+			c.consecutive403.Store(0)
+			return resp, nil
 		case r.hints.accept503 && resp.status == 503:
 			c.consecutive403.Store(0)
 			return resp, nil

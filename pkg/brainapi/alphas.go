@@ -132,6 +132,9 @@ func parseSubmitVerdict(resp *rawResponse) *Verdict {
 	if resp == nil {
 		return nil
 	}
+	if resp.status >= 300 && resp.status < 400 {
+		return nil // 303 "still processing" poll signal (redirect-follow disabled); keep polling
+	}
 	if len(resp.body) == 0 {
 		if resp.status == 503 || (resp.status >= 200 && resp.status < 300) {
 			return nil // accepted/queued, body will populate; keep polling
