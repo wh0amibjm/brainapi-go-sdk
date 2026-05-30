@@ -2,6 +2,7 @@ package brainapi
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 )
 
@@ -354,6 +355,14 @@ func (p *PnLPoint) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(raw[0], &p.Date); err != nil {
 		return err
 	}
+	// BRAIN emits null (or a 1-element tuple) for the value on non-trading / gap
+	// days. The return/corr math (TrimPnLToYears, PnLToReturns) already drops
+	// non-finite points, so decode a null/absent value as NaN rather than failing
+	// the ENTIRE series on a single gap. MarshalJSON re-encodes NaN back to null.
+	if len(raw[1]) == 0 || string(raw[1]) == "null" {
+		p.Value = math.NaN()
+		return nil
+	}
 	var n json.Number
 	if err := json.Unmarshal(raw[1], &n); err != nil {
 		return err
@@ -368,6 +377,12 @@ func (p *PnLPoint) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON re-encodes a PnLPoint as the [date, value] tuple BRAIN emits.
 func (p PnLPoint) MarshalJSON() ([]byte, error) {
+	// A non-finite value is a decoded gap (see UnmarshalJSON); re-encode it as
+	// null — both faithful to BRAIN's wire shape and valid JSON (json.Marshal
+	// rejects NaN/Inf, which would otherwise break the `alphas pnl` output).
+	if !isFinite(p.Value) {
+		return json.Marshal([2]any{p.Date, nil})
+	}
 	return json.Marshal([2]any{p.Date, p.Value})
 }
 

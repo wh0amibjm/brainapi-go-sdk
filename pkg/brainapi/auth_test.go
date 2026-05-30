@@ -140,3 +140,24 @@ func TestAutoRelogin_On401(t *testing.T) {
 		t.Errorf("expected 2 probe attempts, got %d", probeCount)
 	}
 }
+
+// A request that stays 401 even AFTER a successful re-login must surface an
+// error, not be masked as an empty-body success (which a caller would then
+// mis-parse into a zero-value struct).
+func TestAutoRelogin_StillUnauthorizedAfterRelogin(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/authentication" {
+			w.WriteHeader(201)
+			_, _ = w.Write(loadFixture(t, "auth_login_201_normal.json"))
+			return
+		}
+		// The protected GET stays 401 forever — re-login doesn't help.
+		w.WriteHeader(401)
+		_, _ = w.Write(loadFixture(t, "auth_401_invalid.json"))
+	})
+	cl.SetCredentials("user@x.com", "pw")
+	if _, err := cl.GetAlpha(context.Background(), "qMPjAxnO"); err == nil {
+		t.Fatal("expected an error when still 401 after re-login, got nil (masked success)")
+	}
+}

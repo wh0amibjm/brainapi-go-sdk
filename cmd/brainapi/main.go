@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -152,6 +153,7 @@ func writeErr(err error) {
 	var drfErr *brainapi.DRFError
 	var nvErr *brainapi.NotVerifiedError
 	var personaErr *brainapi.PersonaInquiryError
+	var netErr net.Error
 
 	switch {
 	case errors.As(err, &apiErr):
@@ -165,7 +167,7 @@ func writeErr(err error) {
 		kind = "rate_limit"
 		details = map[string]any{
 			"status": rlErr.Status, "retry_after_ms": rlErr.RetryAfter.Milliseconds(),
-			"cooldown": rlErr.Cooldown,
+			"cooldown": rlErr.Cooldown, "body": tryJSON(rlErr.Body),
 		}
 		code = exitRateLimit
 	case errors.As(err, &banErr):
@@ -174,10 +176,11 @@ func writeErr(err error) {
 		code = exitBanned
 	case errors.As(err, &drfErr):
 		kind = "drf_validation"
-		details = drfErr.Fields
+		details = map[string]any{"status": drfErr.Status, "url": drfErr.URL, "fields": drfErr.Fields}
 		code = exitDRF
 	case errors.As(err, &nvErr):
 		kind = "not_verified"
+		details = map[string]any{"status": nvErr.Status, "body": tryJSON(nvErr.Body)}
 		code = exitBanned
 	case errors.As(err, &personaErr):
 		kind = "persona_inquiry"
@@ -195,6 +198,16 @@ func writeErr(err error) {
 		kind = "long_poll_exceeded"
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		kind = "context"
+		code = exitNetwork
+	case errors.Is(err, brainapi.ErrInvalidArgument):
+		// Caller-supplied bad input (empty id, missing creds, …) — a usage error,
+		// not a server-side API failure. Must not share exit 6 with `api`/`error`.
+		kind = "invalid_argument"
+		code = exitUsage
+	case errors.As(err, &netErr):
+		// Transport-layer failure (connection refused, TLS, DNS, proxy, read) —
+		// distinct from a server-side API error, so it gets the NETWORK exit code.
+		kind = "network"
 		code = exitNetwork
 	default:
 		kind = "error"

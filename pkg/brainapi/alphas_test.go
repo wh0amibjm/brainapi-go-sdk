@@ -99,6 +99,75 @@ func TestSubmitAlpha_PendingThenLongPollExceeded(t *testing.T) {
 	}
 }
 
+func TestSubmitAlpha_Verified(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "submit_200_verified.json"))
+	})
+	v, err := cl.SubmitAlpha(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("SubmitAlpha: %v", err)
+	}
+	if v.Status != "verified" {
+		t.Errorf("expected verified, got %s (reason=%s)", v.Status, v.Reason)
+	}
+}
+
+// A 2xx whose SELF_CORRELATION check is not yet attached (the deterministic
+// gates land in the body before corr is computed) must NOT be reported verified
+// — corr is the whole point of the submit long-poll. Keep polling → pending_corr.
+func TestSubmitAlpha_CorrAbsentKeepsPolling(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0.01")
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "submit_200_corr_absent.json"))
+	})
+	v, err := cl.SubmitAlpha(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("SubmitAlpha: %v", err)
+	}
+	if v.Status != "pending_corr" {
+		t.Errorf("expected pending_corr (corr absent → keep polling), got %s", v.Status)
+	}
+}
+
+// A SELF_CORRELATION result of ERROR is not a pass and must not be reported verified.
+func TestSubmitAlpha_CorrErrorKeepsPolling(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0.01")
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "submit_200_corr_error.json"))
+	})
+	v, err := cl.SubmitAlpha(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("SubmitAlpha: %v", err)
+	}
+	if v.Status != "pending_corr" {
+		t.Errorf("expected pending_corr (corr ERROR → keep polling), got %s", v.Status)
+	}
+}
+
+// A 503 carrying a non-empty body (no `is`) is still BRAIN's "queued" signal —
+// keep polling, not submit_failed.
+func TestSubmitAlpha_503WithBodyKeepsPolling(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0.01")
+		w.WriteHeader(503)
+		_, _ = w.Write([]byte(`{"detail":"queued"}`))
+	})
+	v, err := cl.SubmitAlpha(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("SubmitAlpha: %v", err)
+	}
+	if v.Status != "pending_corr" {
+		t.Errorf("expected pending_corr (503+body → keep polling), got %s (reason=%s)", v.Status, v.Reason)
+	}
+}
+
 func TestAlphaSelfCorrelation_LongPollThenTerminal(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32

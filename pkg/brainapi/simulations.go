@@ -21,7 +21,10 @@ func (c *Client) CreateSimulation(ctx context.Context, req SimulationRequest) (s
 		return "", err
 	}
 
-	release := c.reserveSimSlot()
+	release, err := c.reserveSimSlot(ctx)
+	if err != nil {
+		return "", err
+	}
 	defer release()
 
 	resp, err := c.do(ctx, doRequest{

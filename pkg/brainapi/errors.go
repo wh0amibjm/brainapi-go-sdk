@@ -74,7 +74,9 @@ func (e *BannedError) Error() string {
 // yet email-verified. BRAIN exposes this as 403 with body containing
 // "NOT_VERIFIED".
 type NotVerifiedError struct {
-	Email string
+	Email  string
+	Status int
+	Body   []byte
 }
 
 func (e *NotVerifiedError) Error() string {

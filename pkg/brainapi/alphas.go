@@ -135,8 +135,11 @@ func parseSubmitVerdict(resp *rawResponse) *Verdict {
 	if resp.status >= 300 && resp.status < 400 {
 		return nil // 303 "still processing" poll signal (redirect-follow disabled); keep polling
 	}
+	if resp.status == 503 {
+		return nil // BRAIN's "queued, keep polling" signal — regardless of body shape
+	}
 	if len(resp.body) == 0 {
-		if resp.status == 503 || (resp.status >= 200 && resp.status < 300) {
+		if resp.status >= 200 && resp.status < 300 {
 			return nil // accepted/queued, body will populate; keep polling
 		}
 		return &Verdict{
@@ -194,8 +197,13 @@ func parseSubmitVerdict(resp *rawResponse) *Verdict {
 			HTTP:   resp.status,
 		}
 	}
-	if corr != nil && corr.Result == "PENDING" {
-		return nil // keep polling
+	// SELF_CORRELATION must be attached AND PASS for a verified submit. The
+	// deterministic gates (LOW_SHARPE, LOW_FITNESS, …) attach to the body before
+	// corr is computed, so a 2xx whose corr check is absent, PENDING, ERROR, or
+	// any non-PASS result is NOT terminal-verified — keep polling (→ pending_corr
+	// at the cap) rather than mis-reporting an un-screened alpha as live.
+	if corr == nil || corr.Result != "PASS" {
+		return nil
 	}
 	if resp.status >= 200 && resp.status < 300 {
 		var alpha Alpha

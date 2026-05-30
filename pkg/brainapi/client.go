@@ -115,6 +115,7 @@ type Client struct {
 
 	consecutive403 atomic.Int32
 	bannedFlag     atomic.Bool
+	banReason      atomic.Pointer[string] // reason captured when bannedFlag is set; reused by the short-circuit
 
 	cooldownMu    sync.RWMutex
 	cooldownUntil time.Time
@@ -262,12 +263,19 @@ func (c *Client) setCooldown(d time.Duration) {
 	}
 }
 
-// reserveSimSlot acquires one of MaxConcurrentSims slots. Returns a release
-// func; the caller must always defer it. ctxDone wakes the caller if the
-// context is cancelled while waiting.
-func (c *Client) reserveSimSlot() func() {
-	c.simSem <- struct{}{}
-	return func() { <-c.simSem }
+// reserveSimSlot acquires one of MaxConcurrentSims submission slots, bounding
+// the number of concurrent POST /simulations in flight (NOT the number of
+// simulations running on BRAIN — the slot is released once the create returns,
+// before WaitForSimulation polls). Returns a release func the caller must
+// defer. Honors ctx: a caller cancelled or timed-out while queued for a slot
+// returns ctx.Err() instead of blocking indefinitely.
+func (c *Client) reserveSimSlot(ctx context.Context) (func(), error) {
+	select {
+	case c.simSem <- struct{}{}:
+		return func() { <-c.simSem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // checkBudget enforces the daily quota gate. kind is "sim" or "submit".

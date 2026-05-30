@@ -164,28 +164,30 @@ var staticEnvelope = envelopeSpec{
 
 var staticExitCodes = []exitCodeSpec{
 	{Code: 0, Name: "OK"},
-	{Code: 2, Name: "USAGE", Kinds: []string{"no_output"}},
+	{Code: 2, Name: "USAGE", Kinds: []string{"no_output", "invalid_argument"}},
 	{Code: 3, Name: "RATE_LIMIT", Kinds: []string{"rate_limit", "cooldown"}},
 	{Code: 4, Name: "BANNED", Kinds: []string{"banned", "not_verified"}},
 	{Code: 5, Name: "DRF_VALIDATION", Kinds: []string{"drf_validation"}},
 	{Code: 6, Name: "API", Kinds: []string{"api", "error", "not_authenticated", "long_poll_exceeded"}},
 	{Code: 7, Name: "BUDGET", Kinds: []string{"budget"}},
-	{Code: 8, Name: "NETWORK", Kinds: []string{"context"}},
+	{Code: 8, Name: "NETWORK", Kinds: []string{"context", "network"}},
 	{Code: 10, Name: "PERSONA", Kinds: []string{"persona_inquiry"}},
 }
 
 var staticErrorKinds = []errorKindSpec{
 	{Kind: "api", ExitCode: 6, DetailsShape: "{status:int, method:string, url:string, body:any}"},
-	{Kind: "rate_limit", ExitCode: 3, DetailsShape: "{status:int, retry_after_ms:int, cooldown:bool}"},
+	{Kind: "rate_limit", ExitCode: 3, DetailsShape: "{status:int, retry_after_ms:int, cooldown:bool, body:any}"},
 	{Kind: "banned", ExitCode: 4, DetailsShape: "{streak:int, reason:string}"},
-	{Kind: "not_verified", ExitCode: 4},
-	{Kind: "drf_validation", ExitCode: 5, DetailsShape: "{<field>:[<msg>,...], ...}"},
+	{Kind: "not_verified", ExitCode: 4, DetailsShape: "{status:int, body:any}"},
+	{Kind: "drf_validation", ExitCode: 5, DetailsShape: "{status:int, url:string, fields:{<field>:[<msg>,...]}}"},
 	{Kind: "persona_inquiry", ExitCode: 10, DetailsShape: "{inquiry:string}"},
 	{Kind: "budget", ExitCode: 7},
 	{Kind: "not_authenticated", ExitCode: 6},
 	{Kind: "cooldown", ExitCode: 3},
 	{Kind: "long_poll_exceeded", ExitCode: 6},
 	{Kind: "context", ExitCode: 8},
+	{Kind: "network", ExitCode: 8},
+	{Kind: "invalid_argument", ExitCode: 2},
 	{Kind: "error", ExitCode: 6},
 	{Kind: "no_output", ExitCode: 2},
 }

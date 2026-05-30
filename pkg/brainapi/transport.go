@@ -282,7 +282,11 @@ type basicAuth struct {
 //nolint:gocritic // unifies HTTP retry policy in one place by design
 func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 	if c.bannedFlag.Load() {
-		return nil, &BannedError{Streak: int(c.consecutive403.Load())}
+		reason := ""
+		if p := c.banReason.Load(); p != nil {
+			reason = *p
+		}
+		return nil, &BannedError{Streak: int(c.consecutive403.Load()), Reason: reason}
 	}
 	if d := c.Cooldown(); d > 0 {
 		return nil, fmt.Errorf("%w: %s remaining", ErrCooldown, d.Round(time.Second))
@@ -378,8 +382,10 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 				return resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body}
 			}
 			if relogged {
-				c.consecutive403.Store(0)
-				return resp, nil
+				// Still 401 AFTER a successful re-login → a genuine auth failure
+				// (forbidden account / immediately-invalidated session), not
+				// success. Returning nil here masked it as an empty-body 2xx.
+				return resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body}
 			}
 			email, pass := c.credentials()
 			if email == "" || pass == "" {
@@ -399,12 +405,14 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 			}
 			// NOT_VERIFIED is its own typed error and not a ban-trigger.
 			if bytes.Contains(resp.body, []byte("NOT_VERIFIED")) {
-				return resp, &NotVerifiedError{}
+				return resp, &NotVerifiedError{Status: resp.status, Body: resp.body}
 			}
 			streak := c.consecutive403.Add(1)
 			if c.banThreshold > 0 && int(streak) >= c.banThreshold {
+				reason := shortBody(resp.body)
 				c.bannedFlag.Store(true)
-				return resp, &BannedError{Streak: int(streak), Reason: shortBody(resp.body)}
+				c.banReason.Store(&reason)
+				return resp, &BannedError{Streak: int(streak), Reason: reason}
 			}
 			if attempt >= c.maxRetries {
 				return resp, nil
