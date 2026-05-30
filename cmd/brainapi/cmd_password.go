@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
+
+	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
 )
 
 func newPasswordCmd() *cobra.Command {
@@ -18,21 +22,12 @@ func newPasswordForgotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "forgot --email <addr> [--recaptcha <token>]",
 		Short: "POST /user/password/forgot: initiate password reset flow",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (map[string]bool, error) {
 			if err := cl.ForgotPassword(ctx, email, recaptcha); err != nil {
-				writeErr(err)
-				return nil
+				return nil, err
 			}
-			writeOK(map[string]bool{"reset_initiated": true})
-			return nil
-		},
+			return map[string]bool{"reset_initiated": true}, nil
+		}),
 	}
 	cmd.Flags().StringVar(&email, "email", "", "Email to send reset mail to (required)")
 	cmd.Flags().StringVar(&recaptcha, "recaptcha", "", "Legacy reCAPTCHA token (leave empty if BRAIN dropped the field)")
@@ -44,21 +39,12 @@ func newPasswordResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reset --jwt <token> --password <new>",
 		Short: "POST /user/password/reset: complete password reset with JWT + new password",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (map[string]bool, error) {
 			if err := cl.ResetPassword(ctx, jwt, password); err != nil {
-				writeErr(err)
-				return nil
+				return nil, err
 			}
-			writeOK(map[string]bool{"reset": true})
-			return nil
-		},
+			return map[string]bool{"reset": true}, nil
+		}),
 	}
 	cmd.Flags().StringVar(&jwt, "jwt", "", "JWT from reset-mail link's ?token= param (required)")
 	cmd.Flags().StringVar(&password, "password", "", "New password (required)")

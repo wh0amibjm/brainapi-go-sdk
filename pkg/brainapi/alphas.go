@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 )
 
@@ -13,8 +12,8 @@ import (
 // UNSUBMITTED alphas the verdict comes from SubmitAlpha's long-poll, not from
 // this endpoint.
 func (c *Client) GetAlpha(ctx context.Context, id string) (*Alpha, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -23,11 +22,11 @@ func (c *Client) GetAlpha(ctx context.Context, id string) (*Alpha, error) {
 	if err != nil {
 		return nil, err
 	}
-	var a Alpha
-	if err := json.Unmarshal(resp.body, &a); err != nil {
-		return nil, fmt.Errorf("brainapi: parse alpha: %w", err)
+	a, err := decodeBody[Alpha](resp.body, "alpha")
+	if err != nil {
+		return nil, err
 	}
-	return &a, nil
+	return a, nil
 }
 
 // CheckAlpha calls GET /alphas/{id}/check and long-polls until a terminal
@@ -38,8 +37,8 @@ func (c *Client) GetAlpha(ctx context.Context, id string) (*Alpha, error) {
 // It does NOT compute SELF_CORRELATION — that verdict only comes from
 // SubmitAlpha.
 func (c *Client) CheckAlpha(ctx context.Context, id string) (*IsBlock, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -55,11 +54,11 @@ func (c *Client) CheckAlpha(ctx context.Context, id string) (*IsBlock, error) {
 	if len(resp.body) == 0 {
 		return nil, ErrLongPollExceeded
 	}
-	var wrap struct {
+	wrap, err := decodeBody[struct {
 		Is *IsBlock `json:"is"`
-	}
-	if err := json.Unmarshal(resp.body, &wrap); err != nil {
-		return nil, fmt.Errorf("brainapi: parse check body: %w", err)
+	}](resp.body, "check body")
+	if err != nil {
+		return nil, err
 	}
 	if wrap.Is == nil {
 		wrap.Is = &IsBlock{}
@@ -76,8 +75,8 @@ func (c *Client) CheckAlpha(ctx context.Context, id string) (*IsBlock, error) {
 //
 // Budget: each call consumes one /submit slot if DailyBudget.Submits is set.
 func (c *Client) SubmitAlpha(ctx context.Context, id string) (*Verdict, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
 	}
 	if err := c.checkBudget("submit"); err != nil {
 		return nil, err
@@ -235,8 +234,8 @@ func joinStrings(s []string, sep string) string {
 // PnL series is populated. Returns nil + ErrLongPollExceeded if the cache
 // stays cold past MaxLongPolls.
 func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -252,11 +251,11 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 	if len(resp.body) == 0 {
 		return nil, ErrLongPollExceeded
 	}
-	var s PnLSeries
-	if err := json.Unmarshal(resp.body, &s); err != nil {
-		return nil, fmt.Errorf("brainapi: parse pnl: %w", err)
+	s, err := decodeBody[PnLSeries](resp.body, "pnl")
+	if err != nil {
+		return nil, err
 	}
-	return &s, nil
+	return s, nil
 }
 
 // AlphaSelfCorrelation calls GET /alphas/{id}/correlations/self and long-polls
@@ -276,8 +275,8 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 // Sibling /correlations/prod returns 403 on the IQC consultant tier through
 // July 2026 and is not exposed by the SDK.
 func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorrelationBlock, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: alpha id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -290,29 +289,22 @@ func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorr
 	if len(resp.body) == 0 {
 		return nil, ErrLongPollExceeded
 	}
-	var b SelfCorrelationBlock
-	if err := json.Unmarshal(resp.body, &b); err != nil {
-		return nil, fmt.Errorf("brainapi: parse self-correlation: %w", err)
+	b, err := decodeBody[SelfCorrelationBlock](resp.body, "self-correlation")
+	if err != nil {
+		return nil, err
 	}
-	return &b, nil
+	return b, nil
 }
 
 // ListAlphas returns the first page of GET /users/self/alphas with the
 // supplied options. Use ListAlphasAll for an iterator over all pages.
 func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[Alpha], error) {
-	qs := url.Values{}
-	if opts.Status != "" {
-		qs.Set("status", opts.Status)
-	}
-	if opts.Limit > 0 {
-		qs.Set("limit", strconv.Itoa(opts.Limit))
-	}
-	if opts.Offset > 0 {
-		qs.Set("offset", strconv.Itoa(opts.Offset))
-	}
-	if opts.Order != "" {
-		qs.Set("order", opts.Order)
-	}
+	qs := newQuery().
+		setIfNotEmpty("status", opts.Status).
+		setIfPositive("limit", opts.Limit).
+		setIfPositive("offset", opts.Offset).
+		setIfNotEmpty("order", opts.Order).
+		values()
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
 		path:   "/users/self/alphas",
@@ -321,53 +313,34 @@ func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[
 	if err != nil {
 		return nil, err
 	}
-	var page Page[Alpha]
-	if err := json.Unmarshal(resp.body, &page); err != nil {
-		return nil, fmt.Errorf("brainapi: parse alphas page: %w", err)
+	page, err := decodeBody[Page[Alpha]](resp.body, "alphas page")
+	if err != nil {
+		return nil, err
 	}
-	return &page, nil
+	return page, nil
 }
 
 // ListAlphasAll yields every alpha matching opts by following Django REST
 // pagination. Callers must drain the returned channel; cancellation is
 // honored via ctx.
 func (c *Client) ListAlphasAll(ctx context.Context, opts ListAlphasOptions) (<-chan Alpha, <-chan error) {
-	out := make(chan Alpha)
-	errs := make(chan error, 1)
-	go func() {
-		defer close(out)
-		defer close(errs)
-		offset := opts.Offset
-		limit := opts.Limit
-		if limit == 0 {
-			limit = 100
+	limit := opts.Limit
+	if limit == 0 {
+		limit = 100
+	}
+	return paginateAll(ctx, opts.Offset, func(offset int) ([]Alpha, bool, error) {
+		page, err := c.ListAlphas(ctx, ListAlphasOptions{
+			Status: opts.Status,
+			Limit:  limit,
+			Offset: offset,
+			Order:  opts.Order,
+		})
+		if err != nil {
+			return nil, false, err
 		}
-		for {
-			page, err := c.ListAlphas(ctx, ListAlphasOptions{
-				Status: opts.Status,
-				Limit:  limit,
-				Offset: offset,
-				Order:  opts.Order,
-			})
-			if err != nil {
-				errs <- err
-				return
-			}
-			for _, a := range page.Results {
-				select {
-				case <-ctx.Done():
-					errs <- ctx.Err()
-					return
-				case out <- a:
-				}
-			}
-			if page.Next == nil || *page.Next == "" || len(page.Results) == 0 {
-				return
-			}
-			offset += len(page.Results)
-		}
-	}()
-	return out, errs
+		done := page.Next == nil || *page.Next == ""
+		return page.Results, done, nil
+	})
 }
 
 // AlphaCheckBody is a convenience that calls CheckAlpha and converts the

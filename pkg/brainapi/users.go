@@ -15,11 +15,11 @@ func (c *Client) Self(ctx context.Context) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	var u User
-	if err := json.Unmarshal(resp.body, &u); err != nil {
-		return nil, fmt.Errorf("brainapi: parse self: %w", err)
+	u, err := decodeBody[User](resp.body, "self")
+	if err != nil {
+		return nil, err
 	}
-	return &u, nil
+	return u, nil
 }
 
 // Competitions calls GET /users/self/competitions and returns the (paginated)
@@ -32,18 +32,18 @@ func (c *Client) Competitions(ctx context.Context) (*Page[Competition], error) {
 	if err != nil {
 		return nil, err
 	}
-	var p Page[Competition]
-	if err := json.Unmarshal(resp.body, &p); err != nil {
-		return nil, fmt.Errorf("brainapi: parse competitions: %w", err)
+	p, err := decodeBody[Page[Competition]](resp.body, "competitions")
+	if err != nil {
+		return nil, err
 	}
-	return &p, nil
+	return p, nil
 }
 
 // Activities calls GET /users/self/activities/{kind}. The two envelope shapes
 // (DAILY and LIST) are handled by ActivityStream's tagged decoder.
 func (c *Client) Activities(ctx context.Context, kind ActivityKind) (*ActivityStream, error) {
-	if kind == "" {
-		return nil, fmt.Errorf("%w: activity kind required", ErrInvalidArgument)
+	if err := requireNonEmpty(string(kind), "activity kind"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -52,11 +52,11 @@ func (c *Client) Activities(ctx context.Context, kind ActivityKind) (*ActivitySt
 	if err != nil {
 		return nil, err
 	}
-	var s ActivityStream
-	if err := json.Unmarshal(resp.body, &s); err != nil {
-		return nil, fmt.Errorf("brainapi: parse activities: %w", err)
+	s, err := decodeBody[ActivityStream](resp.body, "activities")
+	if err != nil {
+		return nil, err
 	}
-	return &s, nil
+	return s, nil
 }
 
 // ActivityRecord is a generic decoded row from ActivityStream.Records.records,

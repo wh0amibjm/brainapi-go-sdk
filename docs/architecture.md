@@ -55,9 +55,9 @@ type CaptchaSolver interface {
 
 The Client passes its own `FetchCaptchaChallenge` method as `fetch`. The altcha package implements `CaptchaAdapter` with that signature — but never imports `brainapi`. Go's structural interface matching does the rest.
 
-## Why all retry policy lives in `do()`
+## Why all retry policy lives in one place (`do()` + `evaluate()`)
 
-Each endpoint method (Login, GetAlpha, SubmitAlpha, ...) builds a `doRequest{...}` value and calls `client.do(ctx, r)`. `do()` owns:
+Each endpoint method (Login, GetAlpha, SubmitAlpha, ...) builds a `doRequest{...}` value and calls `client.do(ctx, r)`. `do()` runs the retry loop — dispatch, observe, sleep — while a single `evaluate()` call classifies each attempt into a return-or-retry decision and owns:
 
 - 401 auto-relogin (with `noAutoRelogin` escape for Login itself)
 - 403 ban-counter with NOT_VERIFIED + checks-body carve-outs
@@ -71,7 +71,7 @@ Each endpoint method (Login, GetAlpha, SubmitAlpha, ...) builds a `doRequest{...
 
 Each endpoint method just translates the response body to typed shapes. This is intentional — retry semantics are BRAIN-protocol-wide, not endpoint-specific, so they belong in one place.
 
-The two endpoint-specific overrides are surfaced via `retryHints{accept503, longPoll503, longPoll200Empty, noAutoRelogin, maxLongPolls}`. Adding a new endpoint with novel retry behavior should add a hint flag, not branch the do() body further.
+The two endpoint-specific overrides are surfaced via `retryHints{accept503, longPoll503, longPoll200Empty, noAutoRelogin, maxLongPolls}`. Adding a new endpoint with novel retry behavior should add a hint flag, not branch the evaluate() switch further.
 
 ## Why the cookie jar is file-backed (not memory-only)
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -21,22 +22,9 @@ func newUsersSelfCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "self",
 		Short: "GET /users/self",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
-			u, err := cl.Self(ctx)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			writeOK(u)
-			return nil
-		},
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (*brainapi.User, error) {
+			return cl.Self(ctx)
+		}),
 	}
 }
 
@@ -44,22 +32,9 @@ func newUsersCompetitionsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "competitions",
 		Short: "GET /users/self/competitions",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
-			p, err := cl.Competitions(ctx)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			writeOK(p)
-			return nil
-		},
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (*brainapi.Page[brainapi.Competition], error) {
+			return cl.Competitions(ctx)
+		}),
 	}
 }
 

@@ -276,20 +276,54 @@ type basicAuth struct {
 	user, pass string
 }
 
-// do performs the request and applies the full retry+ban+cooldown policy.
-// Returns the buffered response (status, headers, body) on terminal outcome.
-//
-//nolint:gocritic // unifies HTTP retry policy in one place by design
-func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
+// attemptDecision is the outcome of classifying one HTTP attempt: either a
+// terminal (resp, err) to hand back to the caller, or a request to retry after
+// sleeping for sleep (which may be 0, e.g. the post-relogin retry).
+type attemptDecision struct {
+	resp  *rawResponse
+	err   error
+	retry bool
+	sleep time.Duration
+}
+
+func terminal(resp *rawResponse, err error) attemptDecision {
+	return attemptDecision{resp: resp, err: err}
+}
+
+func retryIn(sleep time.Duration) attemptDecision {
+	return attemptDecision{retry: true, sleep: sleep}
+}
+
+// retryState carries the loop-local state the per-attempt evaluator reads and
+// updates across attempts.
+type retryState struct {
+	relogged     bool
+	longPollSeen int
+}
+
+// preflight applies the local short-circuit gates that refuse a request before
+// it touches the network: a tripped ban flag and an active cooldown.
+func (c *Client) preflight() error {
 	if c.bannedFlag.Load() {
 		reason := ""
 		if p := c.banReason.Load(); p != nil {
 			reason = *p
 		}
-		return nil, &BannedError{Streak: int(c.consecutive403.Load()), Reason: reason}
+		return &BannedError{Streak: int(c.consecutive403.Load()), Reason: reason}
 	}
 	if d := c.Cooldown(); d > 0 {
-		return nil, fmt.Errorf("%w: %s remaining", ErrCooldown, d.Round(time.Second))
+		return fmt.Errorf("%w: %s remaining", ErrCooldown, d.Round(time.Second))
+	}
+	return nil
+}
+
+// do performs the request and applies the full retry+ban+cooldown policy.
+// Returns the buffered response (status, headers, body) on terminal outcome.
+// Per-attempt classification lives in evaluate; this loop only dispatches and
+// honors the resulting sleep/return decision.
+func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
+	if err := c.preflight(); err != nil {
+		return nil, err
 	}
 
 	bodyBytes := r.rawBody
@@ -302,10 +336,8 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 	}
 
 	urlStr := c.joinURL(r.path, r.query)
-
 	headers := buildHeaders(r, len(bodyBytes) > 0)
-	relogged := false
-	longPollSeen := 0
+	var st retryState
 
 	for attempt := 0; ; attempt++ {
 		select {
@@ -330,154 +362,153 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 		}
 		c.observer.ObserveRequest(r.method, r.path, status, dur, err)
 
-		if err != nil {
-			if attempt >= c.maxRetries {
-				return nil, err
-			}
-			c.logger.Warn("transport error, retrying",
-				"method", r.method, "url", urlStr, "attempt", attempt+1, "err", err.Error())
-			sleep := clamp(time.Duration(attempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)
-			c.observer.ObserveRetry(r.method, r.path, 0, attempt, RetryKindNetwork, sleep)
-			if sleepCtx(ctx, sleep) != nil {
-				return nil, ctx.Err()
-			}
-			continue
+		dec := c.evaluate(ctx, r, urlStr, resp, err, attempt, &st)
+		if !dec.retry {
+			return dec.resp, dec.err
 		}
+		if sleepCtx(ctx, dec.sleep) != nil {
+			return nil, ctx.Err()
+		}
+	}
+}
 
-		// 2xx — happy path. Reset the 403 streak.
-		if resp.status >= 200 && resp.status < 300 {
-			// 200 + Retry-After + empty body = "still computing" for some endpoints.
-			if r.hints.longPoll200Empty && len(resp.body) == 0 {
-				if d, ok := resp.retryAfter(); ok {
-					longPollSeen++
-					if longPollSeen > effectiveMaxLongPolls(c.maxLongPolls, r.hints.maxLongPolls) {
-						return nil, ErrLongPollExceeded
-					}
-					sleep := clamp(d, longPollFloor, longPollCeiling)
-					c.observer.ObserveLongPoll(r.method, r.path, longPollSeen, sleep)
-					if sleepCtx(ctx, sleep) != nil {
-						return nil, ctx.Err()
-					}
-					continue
+// evaluate classifies a single attempt's transport result (resp, err) for the
+// given attempt number into an attemptDecision. It owns the response policy —
+// success, long-poll, auto-relogin, ban detection, rate-limit, server/client
+// errors — and updates the cross-attempt counters in st; the caller (do) owns
+// the loop and the sleep. Returns terminal(...) to stop, retryIn(d) to retry.
+//
+//nolint:gocritic // the status policy is intentionally one flat switch
+func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp *rawResponse, err error, attempt int, st *retryState) attemptDecision {
+	if err != nil {
+		if attempt >= c.maxRetries {
+			return terminal(nil, err)
+		}
+		c.logger.Warn("transport error, retrying",
+			"method", r.method, "url", urlStr, "attempt", attempt+1, "err", err.Error())
+		sleep := clamp(time.Duration(attempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)
+		c.observer.ObserveRetry(r.method, r.path, 0, attempt, RetryKindNetwork, sleep)
+		return retryIn(sleep)
+	}
+
+	// 2xx — happy path. Reset the 403 streak.
+	if resp.status >= 200 && resp.status < 300 {
+		// 200 + Retry-After + empty body = "still computing" for some endpoints.
+		if r.hints.longPoll200Empty && len(resp.body) == 0 {
+			if d, ok := resp.retryAfter(); ok {
+				st.longPollSeen++
+				if st.longPollSeen > effectiveMaxLongPolls(c.maxLongPolls, r.hints.maxLongPolls) {
+					return terminal(nil, ErrLongPollExceeded)
 				}
+				sleep := clamp(d, longPollFloor, longPollCeiling)
+				c.observer.ObserveLongPoll(r.method, r.path, st.longPollSeen, sleep)
+				return retryIn(sleep)
 			}
-			c.consecutive403.Store(0)
-			return resp, nil
 		}
+		c.consecutive403.Store(0)
+		return terminal(resp, nil)
+	}
 
-		switch {
-		case r.hints.accept503 && resp.status >= 300 && resp.status < 400:
-			// BRAIN's "accepted, still processing" poll signal is a 303 See Other
-			// back to the submit URL (+ Retry-After), NOT a real move. With redirect
-			// following disabled it lands here; hand it back so the SubmitAlpha
-			// long-poll keeps polling, exactly like the 503 case below.
-			c.consecutive403.Store(0)
-			return resp, nil
-		case r.hints.accept503 && resp.status == 503:
-			c.consecutive403.Store(0)
-			return resp, nil
+	switch {
+	case r.hints.accept503 && resp.status >= 300 && resp.status < 400:
+		// BRAIN's "accepted, still processing" poll signal is a 303 See Other
+		// back to the submit URL (+ Retry-After), NOT a real move. With redirect
+		// following disabled it lands here; hand it back so the SubmitAlpha
+		// long-poll keeps polling, exactly like the 503 case below.
+		c.consecutive403.Store(0)
+		return terminal(resp, nil)
+	case r.hints.accept503 && resp.status == 503:
+		c.consecutive403.Store(0)
+		return terminal(resp, nil)
 
-		case resp.status == 401:
-			if r.hints.noAutoRelogin {
-				return resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body}
-			}
-			if relogged {
-				// Still 401 AFTER a successful re-login → a genuine auth failure
-				// (forbidden account / immediately-invalidated session), not
-				// success. Returning nil here masked it as an empty-body 2xx.
-				return resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body}
-			}
-			email, pass := c.credentials()
-			if email == "" || pass == "" {
-				return resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body}
-			}
-			if _, err := c.Login(ctx, email, pass); err != nil {
-				return resp, err
-			}
-			relogged = true
-			continue
-
-		case resp.status == 403:
-			// 403 with a `checks` field is a normal alpha-rejection, not a ban.
-			if bytes.Contains(resp.body, []byte(`"checks"`)) {
-				c.consecutive403.Store(0)
-				return resp, nil
-			}
-			// NOT_VERIFIED is its own typed error and not a ban-trigger.
-			if bytes.Contains(resp.body, []byte("NOT_VERIFIED")) {
-				return resp, &NotVerifiedError{Status: resp.status, Body: resp.body}
-			}
-			streak := c.consecutive403.Add(1)
-			if c.banThreshold > 0 && int(streak) >= c.banThreshold {
-				reason := shortBody(resp.body)
-				c.bannedFlag.Store(true)
-				c.banReason.Store(&reason)
-				return resp, &BannedError{Streak: int(streak), Reason: reason}
-			}
-			if attempt >= c.maxRetries {
-				return resp, nil
-			}
-			c.observer.ObserveRetry(r.method, r.path, 403, attempt, RetryKindForbidden, serverErrFloor)
-			if sleepCtx(ctx, serverErrFloor) != nil {
-				return nil, ctx.Err()
-			}
-			continue
-
-		case resp.status == 429:
-			cd := isCooldownBody(resp.body)
-			d, _ := resp.retryAfter()
-			d = clamp(d, rateLimitFloor, rateLimitCeiling)
-			if cd {
-				c.setCooldown(d)
-				c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindCooldown, d)
-			}
-			if attempt >= c.maxRetries {
-				return resp, &RateLimitError{Status: 429, RetryAfter: d, Cooldown: cd, URL: urlStr, Body: resp.body}
-			}
-			c.logger.Warn("rate-limited, sleeping",
-				"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", attempt+1)
-			c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindRateLimit, d)
-			if sleepCtx(ctx, d) != nil {
-				return nil, ctx.Err()
-			}
-			continue
-
-		case resp.status == 503 && r.hints.longPoll503:
-			longPollSeen++
-			if longPollSeen > effectiveMaxLongPolls(c.maxLongPolls, r.hints.maxLongPolls) {
-				return nil, ErrLongPollExceeded
-			}
-			d, _ := resp.retryAfter()
-			d = clamp(d, longPollFloor, longPollCeiling)
-			c.observer.ObserveLongPoll(r.method, r.path, longPollSeen, d)
-			if sleepCtx(ctx, d) != nil {
-				return nil, ctx.Err()
-			}
-			continue
-
-		case resp.status >= 500:
-			if attempt >= c.maxRetries {
-				return resp, &APIError{Status: resp.status, Method: r.method, URL: urlStr, Body: resp.body}
-			}
-			d := clamp(time.Duration(attempt+1)*serverErrFloor, serverErrFloor, serverErrCeiling)
-			c.logger.Warn("server error, retrying",
-				"status", resp.status, "url", urlStr, "attempt", attempt+1, "sleep", d.String())
-			c.observer.ObserveRetry(r.method, r.path, resp.status, attempt, RetryKindServer, d)
-			if sleepCtx(ctx, d) != nil {
-				return nil, ctx.Err()
-			}
-			continue
-
-		case resp.status == 405:
-			return resp, &APIError{Status: 405, Method: r.method, URL: urlStr, Body: resp.body}
-
-		case resp.status == 404:
-			return resp, &APIError{Status: 404, Method: r.method, URL: urlStr, Body: resp.body}
-
-		default:
-			// 4xx — terminal, treat body as the DRF field-error envelope.
-			return resp, classifyClientError(resp, urlStr)
+	case resp.status == 401:
+		if r.hints.noAutoRelogin {
+			return terminal(resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body})
 		}
+		if st.relogged {
+			// Still 401 AFTER a successful re-login → a genuine auth failure
+			// (forbidden account / immediately-invalidated session), not
+			// success. Returning nil here masked it as an empty-body 2xx.
+			return terminal(resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body})
+		}
+		email, pass := c.credentials()
+		if email == "" || pass == "" {
+			return terminal(resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body})
+		}
+		if _, err := c.Login(ctx, email, pass); err != nil {
+			return terminal(resp, err)
+		}
+		st.relogged = true
+		return retryIn(0)
+
+	case resp.status == 403:
+		// 403 with a `checks` field is a normal alpha-rejection, not a ban.
+		if bytes.Contains(resp.body, []byte(`"checks"`)) {
+			c.consecutive403.Store(0)
+			return terminal(resp, nil)
+		}
+		// NOT_VERIFIED is its own typed error and not a ban-trigger.
+		if bytes.Contains(resp.body, []byte("NOT_VERIFIED")) {
+			return terminal(resp, &NotVerifiedError{Status: resp.status, Body: resp.body})
+		}
+		streak := c.consecutive403.Add(1)
+		if c.banThreshold > 0 && int(streak) >= c.banThreshold {
+			reason := shortBody(resp.body)
+			c.bannedFlag.Store(true)
+			c.banReason.Store(&reason)
+			return terminal(resp, &BannedError{Streak: int(streak), Reason: reason})
+		}
+		if attempt >= c.maxRetries {
+			return terminal(resp, nil)
+		}
+		c.observer.ObserveRetry(r.method, r.path, 403, attempt, RetryKindForbidden, serverErrFloor)
+		return retryIn(serverErrFloor)
+
+	case resp.status == 429:
+		cd := isCooldownBody(resp.body)
+		d, _ := resp.retryAfter()
+		d = clamp(d, rateLimitFloor, rateLimitCeiling)
+		if cd {
+			c.setCooldown(d)
+			c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindCooldown, d)
+		}
+		if attempt >= c.maxRetries {
+			return terminal(resp, &RateLimitError{Status: 429, RetryAfter: d, Cooldown: cd, URL: urlStr, Body: resp.body})
+		}
+		c.logger.Warn("rate-limited, sleeping",
+			"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", attempt+1)
+		c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindRateLimit, d)
+		return retryIn(d)
+
+	case resp.status == 503 && r.hints.longPoll503:
+		st.longPollSeen++
+		if st.longPollSeen > effectiveMaxLongPolls(c.maxLongPolls, r.hints.maxLongPolls) {
+			return terminal(nil, ErrLongPollExceeded)
+		}
+		d, _ := resp.retryAfter()
+		d = clamp(d, longPollFloor, longPollCeiling)
+		c.observer.ObserveLongPoll(r.method, r.path, st.longPollSeen, d)
+		return retryIn(d)
+
+	case resp.status >= 500:
+		if attempt >= c.maxRetries {
+			return terminal(resp, &APIError{Status: resp.status, Method: r.method, URL: urlStr, Body: resp.body})
+		}
+		d := clamp(time.Duration(attempt+1)*serverErrFloor, serverErrFloor, serverErrCeiling)
+		c.logger.Warn("server error, retrying",
+			"status", resp.status, "url", urlStr, "attempt", attempt+1, "sleep", d.String())
+		c.observer.ObserveRetry(r.method, r.path, resp.status, attempt, RetryKindServer, d)
+		return retryIn(d)
+
+	case resp.status == 405:
+		return terminal(resp, &APIError{Status: 405, Method: r.method, URL: urlStr, Body: resp.body})
+
+	case resp.status == 404:
+		return terminal(resp, &APIError{Status: 404, Method: r.method, URL: urlStr, Body: resp.body})
+
+	default:
+		// 4xx — terminal, treat body as the DRF field-error envelope.
+		return terminal(resp, classifyClientError(resp, urlStr))
 	}
 }
 

@@ -2,7 +2,6 @@ package brainapi
 
 import (
 	"context"
-	"fmt"
 )
 
 // ReverifyEmail calls POST /user/email/reverify in the anonymous (no-session)
@@ -17,8 +16,8 @@ import (
 // now (we'll find out the first time the live call returns 400 with
 // {recaptcha: ["required"]}).
 func (c *Client) ReverifyEmail(ctx context.Context, email, recaptcha string) error {
-	if email == "" {
-		return fmt.Errorf("%w: email required", ErrInvalidArgument)
+	if err := requireNonEmpty(email, "email"); err != nil {
+		return err
 	}
 	body := map[string]string{"email": email}
 	if recaptcha != "" {
@@ -32,8 +31,8 @@ func (c *Client) ReverifyEmail(ctx context.Context, email, recaptcha string) err
 	if err != nil {
 		return err
 	}
-	if resp.status < 200 || resp.status >= 300 {
-		return &APIError{Status: resp.status, Method: "POST", URL: c.joinURL("/user/email/reverify", nil), Body: resp.body}
+	if err := c.checkStatus(resp, "/user/email/reverify"); err != nil {
+		return err
 	}
 	return nil
 }
@@ -42,8 +41,8 @@ func (c *Client) ReverifyEmail(ctx context.Context, email, recaptcha string) err
 // verification-mail link. The JWT is the entire payload — body is empty,
 // auth lives in the Authorization: Bearer header.
 func (c *Client) VerifyEmail(ctx context.Context, jwt string) error {
-	if jwt == "" {
-		return fmt.Errorf("%w: jwt required", ErrInvalidArgument)
+	if err := requireNonEmpty(jwt, "jwt"); err != nil {
+		return err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method:  "POST",
@@ -54,8 +53,8 @@ func (c *Client) VerifyEmail(ctx context.Context, jwt string) error {
 	if err != nil {
 		return err
 	}
-	if resp.status < 200 || resp.status >= 300 {
-		return &APIError{Status: resp.status, Method: "POST", URL: c.joinURL("/user/email/verify", nil), Body: resp.body}
+	if err := c.checkStatus(resp, "/user/email/verify"); err != nil {
+		return err
 	}
 	return nil
 }

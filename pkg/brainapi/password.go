@@ -2,14 +2,13 @@ package brainapi
 
 import (
 	"context"
-	"fmt"
 )
 
 // ForgotPassword calls POST /user/password/forgot to initiate the reset
 // flow. recaptcha is the legacy v2 token; same caveat as ReverifyEmail.
 func (c *Client) ForgotPassword(ctx context.Context, email, recaptcha string) error {
-	if email == "" {
-		return fmt.Errorf("%w: email required", ErrInvalidArgument)
+	if err := requireNonEmpty(email, "email"); err != nil {
+		return err
 	}
 	body := map[string]string{"email": email}
 	if recaptcha != "" {
@@ -23,8 +22,8 @@ func (c *Client) ForgotPassword(ctx context.Context, email, recaptcha string) er
 	if err != nil {
 		return err
 	}
-	if resp.status < 200 || resp.status >= 300 {
-		return &APIError{Status: resp.status, Method: "POST", URL: c.joinURL("/user/password/forgot", nil), Body: resp.body}
+	if err := c.checkStatus(resp, "/user/password/forgot"); err != nil {
+		return err
 	}
 	return nil
 }
@@ -32,11 +31,11 @@ func (c *Client) ForgotPassword(ctx context.Context, email, recaptcha string) er
 // ResetPassword calls POST /user/password/reset with the JWT from the reset
 // email link plus the desired new password.
 func (c *Client) ResetPassword(ctx context.Context, jwt, newPassword string) error {
-	if jwt == "" {
-		return fmt.Errorf("%w: jwt required", ErrInvalidArgument)
+	if err := requireNonEmpty(jwt, "jwt"); err != nil {
+		return err
 	}
-	if newPassword == "" {
-		return fmt.Errorf("%w: new password required", ErrInvalidArgument)
+	if err := requireNonEmpty(newPassword, "new password"); err != nil {
+		return err
 	}
 	body := map[string]string{
 		"password":     newPassword,
@@ -51,8 +50,8 @@ func (c *Client) ResetPassword(ctx context.Context, jwt, newPassword string) err
 	if err != nil {
 		return err
 	}
-	if resp.status < 200 || resp.status >= 300 {
-		return &APIError{Status: resp.status, Method: "POST", URL: c.joinURL("/user/password/reset", nil), Body: resp.body}
+	if err := c.checkStatus(resp, "/user/password/reset"); err != nil {
+		return err
 	}
 	return nil
 }

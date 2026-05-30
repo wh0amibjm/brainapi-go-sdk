@@ -2,7 +2,6 @@ package brainapi
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -14,8 +13,8 @@ import (
 // Budget: consumes one /sim slot if DailyBudget.Sims is set.
 // Concurrency: bounded by MaxConcurrentSims.
 func (c *Client) CreateSimulation(ctx context.Context, req SimulationRequest) (string, error) {
-	if req.Type == "" {
-		return "", fmt.Errorf("%w: simulation type required", ErrInvalidArgument)
+	if err := requireNonEmpty(req.Type, "simulation type"); err != nil {
+		return "", err
 	}
 	if err := c.checkBudget("sim"); err != nil {
 		return "", err
@@ -57,8 +56,8 @@ func (c *Client) CreateSimulation(ctx context.Context, req SimulationRequest) (s
 // GetSimulation calls GET /simulations/{id} and returns the current status.
 // One-shot call; for a wait-to-completion loop use WaitForSimulation.
 func (c *Client) GetSimulation(ctx context.Context, id string) (*Simulation, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: simulation id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "simulation id"); err != nil {
+		return nil, err
 	}
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
@@ -67,11 +66,11 @@ func (c *Client) GetSimulation(ctx context.Context, id string) (*Simulation, err
 	if err != nil {
 		return nil, err
 	}
-	var s Simulation
-	if err := json.Unmarshal(resp.body, &s); err != nil {
-		return nil, fmt.Errorf("brainapi: parse simulation: %w", err)
+	s, err := decodeBody[Simulation](resp.body, "simulation")
+	if err != nil {
+		return nil, err
 	}
-	return &s, nil
+	return s, nil
 }
 
 // WaitForSimulation polls GET /simulations/{id} until the response carries
@@ -79,8 +78,8 @@ func (c *Client) GetSimulation(ctx context.Context, id string) (*Simulation, err
 // FAIL and ERROR are NOT wrapped as Go errors — the caller is expected to
 // inspect Simulation.Status. We only surface transport / context errors.
 func (c *Client) WaitForSimulation(ctx context.Context, id string) (*Simulation, error) {
-	if id == "" {
-		return nil, fmt.Errorf("%w: simulation id required", ErrInvalidArgument)
+	if err := requireNonEmpty(id, "simulation id"); err != nil {
+		return nil, err
 	}
 	for i := 0; i < c.maxLongPolls; i++ {
 		s, err := c.GetSimulation(ctx, id)

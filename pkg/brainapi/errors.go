@@ -1,6 +1,7 @@
 package brainapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -143,4 +144,33 @@ func AsDRFError(err error) (*DRFError, bool) {
 		return e, true
 	}
 	return nil, false
+}
+
+// decodeBody unmarshals a response body into a fresh T, wrapping any parse
+// error as "brainapi: parse <desc>: %w".
+func decodeBody[T any](body []byte, desc string) (*T, error) {
+	var v T
+	if err := json.Unmarshal(body, &v); err != nil {
+		return nil, fmt.Errorf("brainapi: parse "+desc+": %w", err)
+	}
+	return &v, nil
+}
+
+// checkStatus returns an *APIError when resp is not a 2xx, mirroring the inline
+// guard used by the auth/email/password endpoints — all POST mutations, so the
+// method is fixed rather than threaded through every caller.
+func (c *Client) checkStatus(resp *rawResponse, path string) error {
+	if resp.status < 200 || resp.status >= 300 {
+		return &APIError{Status: resp.status, Method: "POST", URL: c.joinURL(path, nil), Body: resp.body}
+	}
+	return nil
+}
+
+// requireNonEmpty rejects an empty argument with "<name> required" wrapped in
+// ErrInvalidArgument.
+func requireNonEmpty(val, name string) error {
+	if val == "" {
+		return fmt.Errorf("%w: %s required", ErrInvalidArgument, name)
+	}
+	return nil
 }

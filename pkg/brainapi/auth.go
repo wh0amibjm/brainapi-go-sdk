@@ -2,7 +2,6 @@ package brainapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -29,15 +28,17 @@ func (c *Client) Login(ctx context.Context, email, password string) (*Session, e
 	if err != nil {
 		return nil, err
 	}
-	if resp.status < 200 || resp.status >= 300 {
-		return nil, &APIError{Status: resp.status, Method: "POST", URL: c.joinURL("/authentication", nil), Body: resp.body}
+	if err := c.checkStatus(resp, "/authentication"); err != nil {
+		return nil, err
 	}
 
 	var sess Session
 	if len(resp.body) > 0 {
-		if err := json.Unmarshal(resp.body, &sess); err != nil {
-			return nil, fmt.Errorf("brainapi: parse session body: %w", err)
+		s, err := decodeBody[Session](resp.body, "session body")
+		if err != nil {
+			return nil, err
 		}
+		sess = *s
 	}
 	if sess.Inquiry != "" && sess.User == nil {
 		return nil, &PersonaInquiryError{Inquiry: sess.Inquiry}
@@ -64,11 +65,11 @@ func (c *Client) Probe(ctx context.Context) (*SessionInfo, error) {
 	if resp.status == 401 || len(resp.body) == 0 {
 		return nil, ErrNotAuthenticated
 	}
-	var info SessionInfo
-	if err := json.Unmarshal(resp.body, &info); err != nil {
-		return nil, fmt.Errorf("brainapi: parse probe body: %w", err)
+	info, err := decodeBody[SessionInfo](resp.body, "probe body")
+	if err != nil {
+		return nil, err
 	}
-	return &info, nil
+	return info, nil
 }
 
 // Logout calls DELETE /authentication. On success it also wipes the local
@@ -98,8 +99,8 @@ func (c *Client) Logout(ctx context.Context) error {
 // The function POSTs the inquiry id to /authentication/persona and then
 // re-issues POST /authentication to finalize the session.
 func (c *Client) CompletePersona(ctx context.Context, inquiry, email, password string) (*Session, error) {
-	if inquiry == "" {
-		return nil, fmt.Errorf("%w: inquiry id required", ErrInvalidArgument)
+	if err := requireNonEmpty(inquiry, "inquiry id"); err != nil {
+		return nil, err
 	}
 	type personaBody struct {
 		Inquiry string `json:"inquiry"`

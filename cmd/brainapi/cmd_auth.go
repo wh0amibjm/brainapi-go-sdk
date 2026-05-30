@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
 )
 
 func newAuthCmd() *cobra.Command {
@@ -19,24 +22,11 @@ func newAuthLoginCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "login",
 		Short: "POST /authentication: log in with Basic auth credentials",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (*brainapi.Session, error) {
 			user := firstNonEmpty(gf.email, os.Getenv("BRAINAPI_USER"))
 			pass := firstNonEmpty(gf.password, os.Getenv("BRAINAPI_PASS"))
-			sess, err := cl.Login(ctx, user, pass)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			writeOK(sess)
-			return nil
-		},
+			return cl.Login(ctx, user, pass)
+		}),
 	}
 }
 
@@ -44,22 +34,9 @@ func newAuthProbeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "probe",
 		Short: "GET /authentication: return live session info",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
-			info, err := cl.Probe(ctx)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			writeOK(info)
-			return nil
-		},
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (*brainapi.SessionInfo, error) {
+			return cl.Probe(ctx)
+		}),
 	}
 }
 
@@ -67,20 +44,11 @@ func newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "DELETE /authentication: sign out",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (map[string]bool, error) {
 			if err := cl.Logout(ctx); err != nil {
-				writeErr(err)
-				return nil
+				return nil, err
 			}
-			writeOK(map[string]bool{"signed_out": true})
-			return nil
-		},
+			return map[string]bool{"signed_out": true}, nil
+		}),
 	}
 }

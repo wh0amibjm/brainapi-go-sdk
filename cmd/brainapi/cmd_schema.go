@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
@@ -19,22 +21,9 @@ func newSchemaOperatorsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "operators",
 		Short: "GET /operators: full operator catalog (bare array)",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cl, err := newClient(cmd)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			ctx, cancel := ctxWithSignal()
-			defer cancel()
-			ops, err := cl.Operators(ctx)
-			if err != nil {
-				writeErr(err)
-				return nil
-			}
-			writeOK(ops)
-			return nil
-		},
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) ([]brainapi.Operator, error) {
+			return cl.Operators(ctx)
+		}),
 	}
 }
 

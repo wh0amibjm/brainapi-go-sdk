@@ -24,11 +24,11 @@ var AgreeAll = []string{
 // On 201 the body is opaque (TBD upstream); we return the parsed body if
 // non-empty, else nil.
 func (c *Client) Register(ctx context.Context, in RegisterInput) (*User, error) {
-	if in.Email == "" {
-		return nil, fmt.Errorf("%w: email required", ErrInvalidArgument)
+	if err := requireNonEmpty(in.Email, "email"); err != nil {
+		return nil, err
 	}
-	if in.Auxiliary.Password == "" {
-		return nil, fmt.Errorf("%w: auxiliary.password required", ErrInvalidArgument)
+	if err := requireNonEmpty(in.Auxiliary.Password, "auxiliary.password"); err != nil {
+		return nil, err
 	}
 	if in.Auxiliary.Confirmation == "" {
 		in.Auxiliary.Confirmation = in.Auxiliary.Password

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -339,6 +340,38 @@ func singleSlash(a, b string) string {
 		return a + b
 	}
 }
+
+// queryParams is a small fluent builder over url.Values that skips empty or
+// non-positive optional fields, replacing the repetitive `if x != "" { qs.Set }`
+// guards in the list endpoints. Methods return the receiver so calls chain;
+// the underlying map is shared across the chain.
+type queryParams struct{ v url.Values }
+
+func newQuery() queryParams { return queryParams{v: url.Values{}} }
+
+// set always writes the pair (for required fields).
+func (q queryParams) set(key, val string) queryParams {
+	q.v.Set(key, val)
+	return q
+}
+
+// setIfNotEmpty writes the pair only when val is non-empty.
+func (q queryParams) setIfNotEmpty(key, val string) queryParams {
+	if val != "" {
+		q.v.Set(key, val)
+	}
+	return q
+}
+
+// setIfPositive writes key=val only when val > 0.
+func (q queryParams) setIfPositive(key string, val int) queryParams {
+	if val > 0 {
+		q.v.Set(key, strconv.Itoa(val))
+	}
+	return q
+}
+
+func (q queryParams) values() url.Values { return q.v }
 
 // basicAuthHeader produces the value for Authorization: Basic ...
 func basicAuthHeader(user, pass string) string {
