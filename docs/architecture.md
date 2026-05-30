@@ -62,6 +62,7 @@ Each endpoint method (Login, GetAlpha, SubmitAlpha, ...) builds a `doRequest{...
 - 401 auto-relogin (with `noAutoRelogin` escape for Login itself)
 - 403 ban-counter with NOT_VERIFIED + checks-body carve-outs
 - 429 with float-parsed Retry-After + cooldown-on-concurrent-hint
+- 3xx on the submit path: BRAIN's "still processing" 303 has an `http://` `Location` the h2 transport rejects, so redirects are not followed and the 3xx is handed back as a keep-polling tick (same as 503)
 - 503 long-poll for `/check`, `/submit`, `/simulations`, `/recordsets/pnl`
 - 5xx exponential backoff
 - Network-error retry

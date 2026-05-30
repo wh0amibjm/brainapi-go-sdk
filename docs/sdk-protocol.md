@@ -86,29 +86,32 @@ backwards-compatible; renumbering an existing one is a SemVer-major change.
 | Code | Constant       | When                                                              | `error.kind` values                                          |
 |------|----------------|-------------------------------------------------------------------|--------------------------------------------------------------|
 | 0    | OK             | `data` payload produced                                           | n/a                                                          |
-| 2    | USAGE          | Bad flag, missing required arg, cobra parse failure               | `no_output` (stdout empty)                                   |
+| 2    | USAGE          | Bad flag, missing required arg, cobra parse failure, bad caller input | `no_output` (stdout empty), `invalid_argument`          |
 | 3    | RATE_LIMIT     | 429 from BRAIN, or in-process cooldown active                     | `rate_limit`, `cooldown`                                     |
 | 4    | BANNED         | secondary account 403-streak gate tripped, or account not verified      | `banned`, `not_verified`                                     |
 | 5    | DRF_VALIDATION | 400 from BRAIN with DRF field-error envelope                      | `drf_validation`                                             |
 | 6    | API            | Any other 4xx/5xx; also catch-all for non-categorised errors      | `api`, `error`, `not_authenticated`, `long_poll_exceeded`   |
 | 7    | BUDGET         | In-process daily-budget counter is full                           | `budget`                                                     |
-| 8    | NETWORK        | Context cancellation / deadline; stdout write failure             | `context`                                                    |
+| 8    | NETWORK        | Transport failure (conn/TLS/DNS/proxy/read); context cancel / deadline | `context`, `network`                                    |
 | 10   | PERSONA        | Login returned an inquiry envelope (dead-code safety net)         | `persona_inquiry`                                            |
 
 ### `error.kind` enum (complete)
 
 ```
 api                  4xx/5xx with body. details = {status, method, url, body}
-rate_limit           429.        details = {status, retry_after_ms, cooldown}
+rate_limit           429. details = {status, retry_after_ms, cooldown, body}
+                       body = BRAIN's 429 payload; {"detail":"THROTTLED"} ⇒ submission subsystem hung (not a routine cap)
 banned               403-streak. details = {streak, reason}
-not_verified         /users/self verified=false
-drf_validation       400 + DRF. details = {<field>: [<msg>, ...], ...}
+not_verified         403 NOT_VERIFIED. details = {status, body}
+drf_validation       400 + DRF. details = {status, url, fields: {<field>: [<msg>, ...]}}
+invalid_argument     Bad caller input (empty id, missing creds, ...). details = nil   [exit 2]
 persona_inquiry      Login inquiry. details = {inquiry: <id>}
 budget               Local daily-budget gate full. details = nil
 not_authenticated    No creds AND no usable cookie. details = nil
 cooldown             In-process cooldown (concurrent-sim hint). details = nil
 long_poll_exceeded   Long-poll cap reached (no terminal verdict yet). details = nil
 context              ctx.Done() fired (caller cancelled, deadline exceeded)
+network              Transport failure (conn/TLS/DNS/proxy/read). details = nil    [exit 8]
 error                catch-all; bug if you see this in production
 no_output            Synthesised by your wrapper when stdout is empty
 ```
@@ -117,8 +120,8 @@ no_output            Synthesised by your wrapper when stdout is empty
 ad-hoc and may change without a SemVer bump. The kind taxonomy is part of the
 stable contract.
 
-The 400/DRF `details` map carries field-error strings in the **session locale**
-(often `zh-CN`). Match on field names, never on those strings.
+The 400/DRF `details.fields` map carries field-error strings in the **session
+locale** (often `zh-CN`). Match on field names, never on those strings.
 
 ---
 
