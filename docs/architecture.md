@@ -88,7 +88,7 @@ Multi-process concurrency on the same jar is **not** safe. The README documents 
 
 BRAIN's `/simulations` endpoint rate-limits per-account based on in-flight count, not requests-per-second. A semaphore models this exactly: each `CreateSimulation` call acquires a slot before dispatch, releases on completion. A worker pool would over-engineer it.
 
-The default `MaxConcurrentSims=2` matches the production bridge's main-account setting. secondary accounts should explicitly pass `1`.
+The default `MaxConcurrentSims=2` is a conservative main-account default. secondary accounts should explicitly pass `1`.
 
 ## Why daily-budget is in-process
 
@@ -96,9 +96,9 @@ Multi-process callers (e.g. a fleet of `brainapi alphas submit` invocations from
 
 The day boundary at 3 AM ET is BRAIN's own; we mirror it via `time.LoadLocation("America/New_York")`. If TZ data isn't installed (rare on Windows), we fall back to UTC and the counter resets at UTC midnight — not perfectly aligned but never *worse* than no gate.
 
-## Why the spec docs are upstream (not duplicated here)
+## Why the protocol notes live next to the fixtures
 
-`docs/protocol.md` mirrors the *current* BRAIN HTTP shapes, but the canonical truth lives at `the protocol captures under testdata/` — that's where Chrome-DevTools audits land. If a spec drifts between the two, **the the reference project copy wins**. Don't fix BRAIN protocol bugs in this repo without an upstream spec update first.
+`docs/protocol.md` documents the *current* BRAIN HTTP shapes; the canonical truth is the set of Chrome-DevTools-verified response captures pinned under `testdata/`. If the prose drifts from a fresh live capture, the capture wins. Don't fix BRAIN protocol bugs in this repo without re-capturing the live shape and updating the fixture first.
 
 ## What this design intentionally does NOT do
 

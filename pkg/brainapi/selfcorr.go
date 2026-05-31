@@ -1,7 +1,7 @@
 package brainapi
 
-// Local self-correlation Pearson computation. A pure-Go port of the
-// the TypeScript client reference path (src/lib/the reference implementation), so any brainapi-go
+// Local self-correlation Pearson computation. A pure-Go reimplementation
+// of BRAIN's self-correlation semantics, so any brainapi-go
 // consumer can compute self-correlation OFFLINE — no BRAIN call — and:
 //   (a) cross-check BRAIN's /alphas/{id}/correlations/self (catch endpoint drift),
 //   (b) fall back when that endpoint is flaky,
@@ -158,7 +158,7 @@ func PnLToReturns(records []PnLPoint) []ReturnPoint {
 
 // pearson is the Pearson correlation over two equal-length slices. Returns 0
 // for empty/mismatched inputs, zero-variance inputs (BRAIN's np.isnan guard),
-// or a non-finite result. Mirrors the reference implementation pearson.
+// or a non-finite result.
 func pearson(a, b []float64) float64 {
 	n := len(a)
 	if n == 0 || n != len(b) {

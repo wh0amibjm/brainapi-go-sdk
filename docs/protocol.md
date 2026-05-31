@@ -1,8 +1,8 @@
 # BRAIN protocol notes
 
-These are the BRAIN HTTP behaviors that the SDK's transport / parsers depend on. They are mirrored — not authored — from the Chrome-verified specs at the reference project. If anything here disagrees with that upstream, **upstream wins**.
+These are the BRAIN HTTP behaviors that the SDK's transport / parsers depend on. They are captured — via Chrome DevTools auditing against `platform.worldquantbrain.com` — and pinned by the response fixtures in [`testdata/`](../testdata). If anything here disagrees with a fresh live capture, the capture wins.
 
-Source of truth: `the protocol captures under testdata/` (13 spec files, Chrome-DevTools-verified against `platform.worldquantbrain.com`, 106 spec tests passing as of 2026-05-06).
+Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-DevTools-verified against `platform.worldquantbrain.com` (current as of 2026-05-06).
 
 ## Endpoints used
 
@@ -48,7 +48,7 @@ BRAIN sends `"5.0"`, not `"5"`. `strconv.Atoi` errors out and drops the hint sil
 
 ### SELF_CORRELATION verdict lives ONLY in `/alphas/{id}/submit`
 
-`GET /alphas/{id}` returns `result: "PENDING"` indefinitely for UNSUBMITTED alphas. The verdict only appears via the POST + GET long-poll on `/alphas/{id}/submit`. The reference project had a year-long bug where `CorrPollLane` polled the wrong endpoint and silently dropped verdicts — caught 2026-05-05 during the spec audit.
+`GET /alphas/{id}` returns `result: "PENDING"` indefinitely for UNSUBMITTED alphas. The verdict only appears via the POST + GET long-poll on `/alphas/{id}/submit`. Polling the wrong endpoint here silently drops verdicts — a subtle trap, so the SDK only reads the verdict off the submit long-poll.
 
 `Client.SubmitAlpha` does the POST, parses status (200/201/403/503/empty-body), and long-polls GET on the same path until terminal.
 
@@ -93,7 +93,7 @@ This is the endpoint behind `platform.worldquantbrain.com/messages/notifications
 
 ### Forward-compatibility: five metadata fields are `json.RawMessage`
 
-BRAIN has a history of silently retyping metadata fields from `string` to structured objects (caught live during the v0.1.1 the TypeScript client integration). The SDK pre-emptively types these as `json.RawMessage` so the wire shape never breaks the parser:
+BRAIN has a history of silently retyping metadata fields from `string` to structured objects (caught live during v0.1.1 integration testing). The SDK pre-emptively types these as `json.RawMessage` so the wire shape never breaks the parser:
 
 | Field | First-observed reshape |
 |---|---|
@@ -155,4 +155,4 @@ Both daily submit quota and competition Challenge score roll at 3 AM ET, not mid
 - Persona inquiry success-path body — TBD pending a live capture.
 - Success-path 2xx bodies for `POST /users`, `/user/email/{verify,reverify}`, `/user/password/{forgot,reset}` — production code (and this SDK) only inspects status; body shape isn't pinned in tests yet.
 
-These are flagged in `the tier-gated endpoint notes` and the individual spec files.
+These tier limits were observed live against the Conditional-Consultant / TUTORIAL accounts used during protocol capture.

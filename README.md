@@ -6,7 +6,7 @@ A typed Go SDK + cross-platform CLI for the [WorldQuant BRAIN](https://platform.
 - **Importable library** (`pkg/brainapi`) for embedding in other Go programs
 - **TLS impersonation** via [`bogdanfinn/tls-client`](https://github.com/bogdanfinn/tls-client) (Chrome 131 default; Safari / Firefox profiles available)
 - **Altcha PoW captcha** solver for `POST /users` (parallel SHA-256, runtime.NumCPU workers)
-- **Production-grade retry policy** mirroring the reference implementation: float-parsed `Retry-After`, 401 auto-relogin, 403 ban-detection, 503 long-poll for submit/simulations, cooldown on concurrent-sim hints
+- **Production-grade retry policy**: float-parsed `Retry-After`, 401 auto-relogin, 403 ban-detection, 503 long-poll for submit/simulations, cooldown on concurrent-sim hints
 - **No CGO**, builds for `linux/{amd64,arm64}`, `windows/amd64`, `darwin/{amd64,arm64}` from a single source tree
 
 ## Install
@@ -98,8 +98,8 @@ stable JSON envelope, the exit-code → `error.kind` map, the stdin / `--decode`
 conventions, and the non-obvious schema traps (`activities.current` is
 month-to-date not today; BRAIN day rolls at 3 AM ET; etc.).
 
-`the TypeScript client/clients/typescript` is the reference TypeScript wrapper —
-copy its envelope parser, typed-exception hierarchy, and execa plumbing.
+The bundled TypeScript client under [`clients/typescript/`](clients/typescript) is
+the reference wrapper — see its envelope parser, typed-exception hierarchy, and execa plumbing.
 
 ## Endpoint coverage
 
@@ -199,9 +199,9 @@ Single-source-tree, no CGO, no platform-specific build tags — the same `./cmd/
 - **Test coverage**: every endpoint method has a unit test driven by `httptest.Server` replaying real BRAIN-captured payloads from `testdata/`. Retry-policy tests cover float-`Retry-After`, ban-after-streak, cooldown, DRF envelope decoding, long-poll cap.
 - **Integration tests**: gated by `BRAINAPI_INTEGRATION=1` env so CI doesn't accidentally hit production.
 
-## Upstream truth
+## Protocol truth
 
-The endpoint shapes encoded in `pkg/brainapi/types.go` mirror the Chrome-verified protocol specs at `the protocol captures under testdata/` (13 spec files, 106 passing TypeScript spec tests). When BRAIN's protocol changes, fix the upstream specs first, then port the change here. Bug-for-bug compatibility with the reference implementation is intentional.
+The endpoint shapes encoded in `pkg/brainapi/types.go` mirror the Chrome-DevTools-verified response captures pinned under [`testdata/`](testdata) and documented in [`docs/protocol.md`](docs/protocol.md). When BRAIN's protocol changes, re-capture the live shape, update the fixture and protocol notes, then port the change into the typed structs.
 
 ## License
 

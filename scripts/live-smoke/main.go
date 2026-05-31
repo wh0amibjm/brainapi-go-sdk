@@ -30,7 +30,7 @@
 // envelope (fewer perms, fewer data-fields), making the test slightly
 // more representative of what production secondary account workers see. A
 // dedicated test account is ideal; pulling one from an existing pool
-// (e.g. the secondary account store status='active' rows) works too.
+// of registered secondary accounts works too.
 // NEVER point this at the main account -- one bad week of CI and you
 // burn through the precious daily budgets.
 //
@@ -47,7 +47,7 @@
 //	2  missing credentials
 //
 // The script picks the deterministic browser profile for the supplied
-// email, so a fingerprint mismatch from the production bridge will surface here.
+// email, so a profile/fingerprint regression will surface here.
 package main
 
 import (

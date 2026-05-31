@@ -22,8 +22,7 @@ func buildBenchChallenge(target, maxN int64) altcha.Challenge {
 	}
 }
 
-// BenchmarkSolve_1Worker mirrors what the reference implementation does:
-// linear scan, single-threaded. Useful as a baseline.
+// BenchmarkSolve_1Worker is the single-threaded linear-scan baseline.
 func BenchmarkSolve_1Worker(b *testing.B) {
 	ch := buildBenchChallenge(50_000, 100_000)
 	b.ResetTimer()

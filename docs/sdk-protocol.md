@@ -3,7 +3,7 @@
 This doc is for **programs that invoke `brainapi` as a subprocess** (or wrap it
 as a library client in another language). It captures the things you can rely
 on, the things you must NOT assume, and the non-obvious traps that we (or
-downstream integrators like `the TypeScript client`) have hit in practice.
+downstream integrators) have hit in practice.
 
 If you are calling the BRAIN HTTP API directly, see [protocol.md](protocol.md)
 instead — that covers BRAIN's over-the-wire behaviour, not brainapi's.
@@ -21,9 +21,9 @@ You are a downstream program (Node, Python, shell, another Go service) that
 needs to run `brainapi` as a child process and consume its stdout. This doc
 tells you the stable contract you can build on without reading Go source.
 
-A worked TypeScript example lives at
-`clients/typescript/` (the TypeScript client's
-`the bundled TypeScript client`) — it implements every convention listed here.
+A worked TypeScript example lives under
+[`clients/typescript/`](../clients/typescript) — it implements every convention
+listed here.
 
 ---
 
@@ -73,8 +73,8 @@ on stdout** — the human message goes to stderr. Wrappers should fall back to:
 { "ok": false, "error": { "kind": "no_output", "message": "<stderr or generic>" } }
 ```
 
-so callers always get the same shape. See
-`the TypeScript client/the bundled TypeScript client's envelope parser` for a reference.
+so callers always get the same shape. See the bundled `clients/typescript/`
+client's envelope parser for a reference.
 
 ---
 
@@ -204,8 +204,7 @@ platform-specific equivalent). Override via `--cookie-jar /path`. The file is:
 - `chmod 0600` on POSIX
 
 Two processes sharing one jar will race on writes. Use one jar per logical
-session (the TypeScript client's `primary_account.cookie_jar` config lives next to its
-data dir, separate from any other tooling on the same machine).
+session, kept separate from any other tooling sharing the same machine.
 
 ### 401 auto-relogin
 
@@ -238,7 +237,7 @@ The five summary windows:
 There is no `today` field. Look up `records.find(r => r.date === brainDay())`
 and read its `value`.
 
-We tripped on this writing the TypeScript client's doctor cross-check (drift came
+This bit us in a doctor-style health cross-check (drift came
 out as 65 because `current.value=67` was MTD not today). Worth flagging in
 red.
 
@@ -252,8 +251,8 @@ midnight. To compute today's BRAIN day string in your wrapper:
 // Take America/New_York time minus 3h, format as YYYY-MM-DD
 ```
 
-the TypeScript client's `brainDay()` (`pkg/brainapi`) is a reference
-implementation.
+`challengeDayStr()` in `pkg/brainapi` is the Go reference implementation of
+this offset.
 
 ### Forward-compat `json.RawMessage` fields
 
@@ -301,7 +300,7 @@ Don't write one paginated reader and hope it works for all three.
 
 These endpoints can block for up to `Options.MaxLongPolls × Retry-After`
 seconds before returning. Set the **subprocess timeout** accordingly —
-the TypeScript client uses `timeout_ms: 300_000` (5 min) as a generous default.
+`timeout_ms: 300_000` (5 min) is a generous default.
 
 | Command | Long-polls on | Default max wall-clock (60 polls × ~5s) |
 |---|---|---|
@@ -347,12 +346,9 @@ Wrappers should pin to a minor range (`^0.1`) until 1.0, then to a major range.
 
 ## Reference wrapper
 
-`the TypeScript client` (TypeScript) is the canonical worked example:
-
-- `clients/typescript` — envelope parser, typed exception hierarchy, every method
-- `clients/typescript` — composing commands on top of the client
-- `clients/typescript` — using `users self` + `users activities` for live health-checks
-- `clients/typescript` — envelope parser unit tests
+The bundled TypeScript client under [`clients/typescript/`](../clients/typescript)
+is the canonical worked example — it wraps the CLI behind the envelope contract
+above, with a typed exception hierarchy and one method per endpoint.
 
 If you write a wrapper in another language and it makes sense to upstream it,
 add a row to this section pointing at your reference impl.

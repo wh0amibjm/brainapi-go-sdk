@@ -28,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Offline self-correlation.** `brainapi.SelfCorrLocal(in)` and the
   `brainapi alphas corr-local --json <file|->` command compute self-correlation
-  with NO BRAIN call — a pure-Go port of the the TypeScript client reference path,
-  mirroring `/alphas/{id}/correlations/self` (Pearson over the trailing-4y
+  with NO BRAIN call — a pure-Go reimplementation of BRAIN's
+  `/alphas/{id}/correlations/self` semantics (Pearson over the trailing-4y
   daily-PnL-return window, on the date-intersection of each pair; signed max,
   ranked by `|corr|`; neighbours below 30-day overlap counted as `skipped`).
   Input is `{candidate, neighbours}` where each is `{id, records:[[date,pnl]…]}`
@@ -104,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Resolving the wrapper to the final `?token=` URL requires a US residential
   IP — SendGrid 400s requests from datacenter IPs. This is upstream behavior,
   not an SDK bug. End users clicking the email button in a browser are not
-  affected. Programmatic register→verify pipelines (programmatically) should
+  affected. Programmatic register→verify pipelines should
   use a residential proxy for the wrapper-resolution hop, then hand the JWT
   to the SDK. Accounts are auto-approved at registration for TUTORIAL-tier
   API access without the verify click, so the SDK is fully usable without
@@ -118,8 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advisory) and any future status BRAIN might add. BRAIN populates
   `alpha` whenever a sim produced one regardless of the status string,
   so the wait loop now terminates on `s.Alpha != ""` (success path) or
-  explicit `FAIL` / `ERROR` (failure path). Mirrors the reference project's
-  long-tested `'alpha' in body` check; eliminates a real `long_poll_
+  explicit `FAIL` / `ERROR` (failure path). Matches the long-tested
+  `'alpha' in body` check; eliminates a real `long_poll_
   exceeded` we hit live on `ts_zscore(close, 20)` against a main
   account where BRAIN returned `status: "WARNING", alpha: "..."`.
   Caller-visible effect: `simulations wait` (and the `simulate-and-
@@ -132,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BRAIN silently upgraded several response fields from `string` to
   structured objects, breaking `users competitions` and `alphas list/get`
   with `json: cannot unmarshal object into Go struct field ... of type
-  string`. Caught by live the TypeScript client integration against an account
+  string`. Caught by live integration testing against an account
   with active competition entries. Switched five metadata fields to
   `json.RawMessage` so the SDK no longer dictates their shape (it never
   needed to — none had typed callers inside the repo):

@@ -127,7 +127,7 @@ func newAlphaCorrLocalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "corr-local --json <file|->",
 		Short: "Local self-correlation (offline, no BRAIN call): Pearson over trailing-4y PnL returns of a candidate vs supplied neighbours",
-		Long: "Compute self-correlation OFFLINE from PnL series you already have — a pure-Go port of the the TypeScript client reference path, mirroring GET /alphas/{id}/correlations/self.\n\n" +
+		Long: "Compute self-correlation OFFLINE from PnL series you already have — a pure-Go reimplementation of BRAIN's GET /alphas/{id}/correlations/self semantics.\n\n" +
 			"Body (--json file path or '-' for stdin):\n" +
 			`  {"candidate":{"id":"X","records":[["2020-01-02",1234.5],...]},` + "\n" +
 			`   "neighbours":[{"id":"Y","records":[["2020-01-02",10.0],...]},...]}` + "\n\n" +

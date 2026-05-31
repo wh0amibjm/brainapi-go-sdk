@@ -14,7 +14,7 @@ import (
 type BrowserProfile string
 
 const (
-	ProfileChrome131  BrowserProfile = "chrome131" // production-parity with the production bridge
+	ProfileChrome131  BrowserProfile = "chrome131" // default production profile
 	ProfileChrome133  BrowserProfile = "chrome133" // tls-client's current default
 	ProfileChrome144  BrowserProfile = "chrome144"
 	ProfileChrome146  BrowserProfile = "chrome146"
@@ -25,9 +25,8 @@ const (
 )
 
 // DefaultProfile is the production-recommended starting point. We keep this
-// at chrome131 (mapped to Chrome_131_PSK internally) for parity with the
-// production bridge — migrating an account from TS to Go preserves its
-// fingerprint identity.
+// at chrome131 (mapped to Chrome_131_PSK internally); pinning it means an
+// account's fingerprint identity stays stable across SDK upgrades.
 const DefaultProfile = ProfileChrome131
 
 // subProfiles is the deterministic-rotation pool for secondary accounts. Keeping

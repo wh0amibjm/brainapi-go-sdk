@@ -13,7 +13,7 @@ cookies-*.json
 .env
 .env.local
 
-# End-to-end test credentials mirrored from the reference project — NEVER commit
+# End-to-end test credentials for live secondary accounts — NEVER commit
 testdata/test-accounts/
 
 # AI tooling (locally generated)

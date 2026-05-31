@@ -39,7 +39,7 @@ Both forms shell out to `go run ./scripts/live-smoke`. Credentials for the five 
 
 **Use a secondary account, NOT the main account.** Live-smoke is a canary — it runs weekly on CI and ad-hoc on demand, so quota/rate-limit pressure adds up. secondary accounts also exercise a different permission envelope (fewer perms, fewer data-fields), making the test slightly more representative of production secondary account workers. A dedicated test account is ideal; pulling one from `testdata/test-accounts/accounts.json` works too. NEVER point this at the main account — one bad week of CI and you burn through the precious daily budgets.
 
-The script picks the deterministic browser profile for the supplied email (`ProfileForEmail`), so a fingerprint mismatch from the production bridge will surface here.
+The script picks the deterministic browser profile for the supplied email (`ProfileForEmail`), so a profile/fingerprint regression will surface here.
 
 ## Exit codes
 
