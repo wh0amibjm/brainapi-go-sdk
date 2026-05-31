@@ -64,7 +64,7 @@ Migrated to GET-only some time before 2026-05-05. The TS code silently swallowed
 
 The submit verdict-bearing `SELF_CORRELATION` check (§ above) only fires after you've already burned a daily submit slot. The standalone correlation endpoint lets you check the same value cheaply before calling `/submit`:
 
-- **Long-poll:** "still computing" is signaled two ways depending on account tier — `503 + Retry-After` (observed on Conditional-Consultant tier, Chrome 2026-05-19) or `200 + empty body + Retry-After` (observed on TUTORIAL secondary account, live SDK capture 2026-05-19). 200 with a non-empty body is terminal. The SDK sets both `longPoll503` and `longPoll200Empty` so the transport retries either signal; ~3 retries to terminal in practice. Cached server-side per alpha — re-running the same alpha returns 200 immediately on the second call.
+- **Long-poll:** "still computing" is signaled two ways depending on account tier — `503 + Retry-After` (observed on Conditional-Consultant tier, Chrome 2026-05-19) or `200 + empty body + Retry-After` (observed on a TUTORIAL-tier account, live SDK capture 2026-05-19). 200 with a non-empty body is terminal. The SDK sets both `longPoll503` and `longPoll200Empty` so the transport retries either signal; ~3 retries to terminal in practice. Cached server-side per alpha — re-running the same alpha returns 200 immediately on the second call.
 - **Response body:** `{schema, records, min, max}`. `records` are positional tuples (top N most-correlated already-submitted alphas) per `schema.properties[*].name`: `id, name, instrumentType, region, universe, correlation, sharpe, returns, turnover, fitness, margin`. `min`/`max` are the aggregate correlation values across the record set.
 - **Threshold:** BRAIN rejects submissions on `correlation >= 0.7` (per `testdata/submit_403_corr_fail.json`). Gate `SubmitAlpha` on `block.Max < 0.7` to avoid wasted `corr_rejected` verdicts and preserve daily submit budget.
 - **Chrome-verified:** 2026-05-19 against `platform.worldquantbrain.com/alphas/{id}` side panel → green "refresh" icon on the "Self Correlation" row triggers this endpoint; the panel's displayed Maximum/Minimum are the body's `max`/`min` verbatim.
@@ -140,7 +140,7 @@ The SDK includes a parallel SHA-256 solver (`pkg/captcha/altcha`) wired by defau
 
 ### Persona inquiry envelope (operationally dead)
 
-Login at `POST /authentication` may return 201 with body `{"inquiry": "<id>"}` instead of `{"user": ..., "permissions": [...]}`. This indicates the persona 2FA-like challenge fired. **In current BRAIN production this is dead code** — zero matches in any rotated production log since the 2026-05-06 audit; both verified secondary accounts that captured login responses got `permissions:["TUTORIAL"]` directly.
+Login at `POST /authentication` may return 201 with body `{"inquiry": "<id>"}` instead of `{"user": ..., "permissions": [...]}`. This indicates the persona 2FA-like challenge fired. **In current BRAIN production this is dead code** — zero matches in any rotated production log since the 2026-05-06 audit; both verified test accounts that captured login responses got `permissions:["TUTORIAL"]` directly.
 
 The SDK keeps `Client.CompletePersona` as a safety net but does not exercise it. If BRAIN starts firing inquiries again, the spec README has the captured 400/404 negative paths to anchor a test; the 200 success body remains TBD.
 

@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cold-cache long-poll on `/correlations/self`.** The original Chrome
   capture was taken from a Conditional-Consultant tier account and only
   surfaced BRAIN's `503 + Retry-After` signaling. Live verification against
-  a TUTORIAL-tier secondary account on 2026-05-19 revealed BRAIN also signals
+  a TUTORIAL-tier account on 2026-05-19 revealed BRAIN also signals
   "still computing" via `200 + empty body + Retry-After` on that tier.
   `AlphaSelfCorrelation` now opts into both `longPoll503` and
   `longPoll200Empty` so the transport retries either signal. Without the
@@ -91,8 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/protocol.md` — added `/correlations/self` endpoint contract, BRAIN's
   dual signaling pattern, the 0.7 threshold, and the `/correlations/prod`
   IQC-tier 403 caveat. `sdk-protocol.md` integrator contract for non-Go
-  consumers. `scripts/live-smoke/README.md` now recommends secondary account
-  usage and warns against main.
+  consumers. `scripts/live-smoke/README.md` now recommends a dedicated test
+  account and warns against main.
 
 ### Changed
 - `chore(ci): bump golangci-lint-action v8 → v9` (Node 20 → Node 24 runner).

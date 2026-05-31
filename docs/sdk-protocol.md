@@ -88,7 +88,7 @@ backwards-compatible; renumbering an existing one is a SemVer-major change.
 | 0    | OK             | `data` payload produced                                           | n/a                                                          |
 | 2    | USAGE          | Bad flag, missing required arg, cobra parse failure, bad caller input | `no_output` (stdout empty), `invalid_argument`          |
 | 3    | RATE_LIMIT     | 429 from BRAIN, or in-process cooldown active                     | `rate_limit`, `cooldown`                                     |
-| 4    | BANNED         | secondary account 403-streak gate tripped, or account not verified      | `banned`, `not_verified`                                     |
+| 4    | BANNED         | 403-streak gate tripped, or account not verified                  | `banned`, `not_verified`                                     |
 | 5    | DRF_VALIDATION | 400 from BRAIN with DRF field-error envelope                      | `drf_validation`                                             |
 | 6    | API            | Any other 4xx/5xx; also catch-all for non-categorised errors      | `api`, `error`, `not_authenticated`, `long_poll_exceeded`   |
 | 7    | BUDGET         | In-process daily-budget counter is full                           | `budget`                                                     |

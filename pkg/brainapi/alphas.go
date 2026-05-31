@@ -265,7 +265,7 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 //
 // "Still computing" is signaled two ways depending on account tier — 503 with
 // Retry-After (observed on Conditional-Consultant) or 200 with empty body and
-// Retry-After (observed on TUTORIAL secondary accounts). Both hints are set so the
+// Retry-After (observed on TUTORIAL-tier accounts). Both hints are set so the
 // transport retries either signal.
 //
 // Use BEFORE SubmitAlpha: if *block.Max >= 0.7 the alpha will be rejected by

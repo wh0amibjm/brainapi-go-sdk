@@ -88,7 +88,7 @@ Multi-process concurrency on the same jar is **not** safe. The README documents 
 
 BRAIN's `/simulations` endpoint rate-limits per-account based on in-flight count, not requests-per-second. A semaphore models this exactly: each `CreateSimulation` call acquires a slot before dispatch, releases on completion. A worker pool would over-engineer it.
 
-The default `MaxConcurrentSims=2` is a conservative main-account default. secondary accounts should explicitly pass `1`.
+The default `MaxConcurrentSims=2` is a conservative main-account default. Secondary accounts should explicitly pass `1`.
 
 ## Why daily-budget is in-process
 

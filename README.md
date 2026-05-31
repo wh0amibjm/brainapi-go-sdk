@@ -108,7 +108,7 @@ Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CL
 | Endpoint | Library method | CLI command | Example |
 |---|---|---|---|
 | `POST /authentication` | `Client.Login` | `auth login` | [201 normal](testdata/auth_login_201_normal.json) / [persona](testdata/auth_login_201_persona.json) / [401 invalid](testdata/auth_401_invalid.json) |
-| `GET /authentication` | `Client.Probe` | `auth probe` | [secondary account](testdata/auth_get_secondary.json) / [401 no-creds](testdata/auth_401_no_creds.json) |
+| `GET /authentication` | `Client.Probe` | `auth probe` | [secondary](testdata/auth_get_secondary.json) / [401 no-creds](testdata/auth_401_no_creds.json) |
 | `DELETE /authentication` | `Client.Logout` | `auth logout` | _(204, no body)_ |
 | `POST /authentication/persona` | `Client.CompletePersona` | _(dead-code safety net)_ | — |
 | `GET /alphas/{id}` | `Client.GetAlpha` | `alphas get` | [alpha](testdata/alpha_detail.json) |

@@ -284,7 +284,7 @@ type Competition struct {
 //
 // Score is intentionally json.Number — the BRAIN edge returns it as an int
 // for active users with non-zero standings (e.g. 45565) but as a float "0.0"
-// for secondary accounts with no competition activity. Captured live 2026-05-18.
+// for accounts with no competition activity. Captured live 2026-05-18.
 type Leaderboard struct {
 	Alphas     int             `json:"alphas"`
 	Country    string          `json:"country"`

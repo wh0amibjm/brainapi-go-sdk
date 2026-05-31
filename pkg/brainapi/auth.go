@@ -93,7 +93,7 @@ func (c *Client) Logout(ctx context.Context) error {
 }
 
 // CompletePersona drives the persona-inquiry flow. Operationally dead-code
-// in current BRAIN production (no secondary account login has triggered the
+// in current BRAIN production (no secondary-account login has triggered the
 // inquiry envelope since rotation), but kept as a safety net per spec.
 //
 // The function POSTs the inquiry id to /authentication/persona and then
