@@ -19,25 +19,25 @@ Fourteen-call read-only validation against the real `api.worldquantbrain.com`. P
 | 13/14 | `GET /users/self/messages` (`Messages`) | `Page[Message]` notification feed (`type`/`tags`/`read`), where new-dataset announcements surface. |
 | 14/14 | `POST /authentication/logout` (`Logout`) | Session-teardown path didn't regress. |
 
-**No submits, no simulations, no register.** Daily-budget endpoints stay untouched; the registration leg has its own canary (`scripts/register`).
+**No submits, no simulations, no register.** Daily-budget endpoints stay untouched.
 
 ## Usage
 
 ```powershell
-$env:BRAINAPI_USER = "secondary account@example.com"
+$env:BRAINAPI_USER = "test-account@example.com"
 $env:BRAINAPI_PASS = "..."
 make test-live-smoke
 ```
 
 ```bash
-BRAINAPI_USER=secondary account@example.com BRAINAPI_PASS=... make test-live-smoke
+BRAINAPI_USER=test-account@example.com BRAINAPI_PASS=... make test-live-smoke
 ```
 
-Both forms shell out to `go run ./scripts/live-smoke`. Credentials for the five rotated secondary accounts live in `testdata/test-accounts/accounts.json` (gitignored).
+Both forms shell out to `go run ./scripts/live-smoke`. Supply credentials for a dedicated test account via the env vars above.
 
 ## Account selection
 
-**Use a secondary account, NOT the main account.** Live-smoke is a canary — it runs weekly on CI and ad-hoc on demand, so quota/rate-limit pressure adds up. secondary accounts also exercise a different permission envelope (fewer perms, fewer data-fields), making the test slightly more representative of production secondary account workers. A dedicated test account is ideal; pulling one from `testdata/test-accounts/accounts.json` works too. NEVER point this at the main account — one bad week of CI and you burn through the precious daily budgets.
+**Use a dedicated test account, NOT the main account.** Live-smoke is a canary — it runs weekly on CI and ad-hoc on demand, so quota/rate-limit pressure adds up. A separate account also exercises a different permission envelope (fewer perms, fewer data-fields), making the test slightly more representative. NEVER point this at the main account — one bad week of CI and you burn through the precious daily budgets.
 
 The script picks the deterministic browser profile for the supplied email (`ProfileForEmail`), so a profile/fingerprint regression will surface here.
 
@@ -58,8 +58,8 @@ The script picks the deterministic browser profile for the supplied email (`Prof
 ## What this does NOT prove
 
 - Daily-budget gates (no submit/simulation/correlations calls).
-- Captcha solver against the real `/captcha` endpoint (`register` covers this).
+- Captcha solver against the real `/captcha` endpoint (unit-tested only).
 - Long-poll behavior on real BRAIN (no submit/check/pnl/simulation/corr call).
-- secondary account permission/tier handling (depends on which account you supply).
+- Account permission/tier handling (depends on which account you supply).
 
-To exercise the register leg, run `make test-register`. To exercise the pre-submit correlation gate against an existing alpha, build it ad-hoc with `brainapi alphas corr <id>`.
+To exercise the register leg, use `brainapi register --json <file>`. To exercise the pre-submit correlation gate against an existing alpha, build it ad-hoc with `brainapi alphas corr <id>`.

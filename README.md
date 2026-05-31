@@ -175,10 +175,10 @@ These caveats — captured by Chrome DevTools auditing against `platform.worldqu
 - **A `429` with body `{"detail":"THROTTLED"}`** means BRAIN's submission/correlation subsystem is hung — in-flight `SELF_CORRELATION` never completes, so the ~3 concurrent slots never free and every submit 429s — distinct from a routine rate limit. The SDK surfaces the 429 body under the `rate_limit` error's `details.body`, so callers can tell "platform is down, retry later" from a per-request cap.
 - **`GET /operators`** returns a bare JSON array; **`GET /data-fields`** uses `{count, results}` (no next/previous); **`GET /users/self/alphas`** uses the full Django REST envelope. Three different shapes — handled per endpoint.
 - **Activity `records.records` are positional tuples**, not dicts. Use `DecodeActivities` to convert via the `schema.properties` column map.
-- **Persona inquiry envelope** at login (`{"inquiry":"..."}`) is operationally dead-code in current BRAIN production, but kept as a safety net per `docs/brain-api-spec/authentication.md`.
+- **Persona inquiry envelope** at login (`{"inquiry":"..."}`) is operationally dead-code in current BRAIN production, but kept as a safety net (see `docs/protocol.md`).
 - **Altcha PoW captcha** is mandatory for `POST /users`. SDK fetches `/captcha`, parallel-solves SHA-256 brute-force across `runtime.NumCPU()` workers (typically <60ms), and injects the base64 payload into `auxiliary.captcha`.
 - **BRAIN day rolls at 3 AM US/Eastern**, not midnight. In-process daily-budget counter is keyed accordingly.
-- **secondary account 403 ban detection** counts consecutive 403s after a re-login attempt. Main accounts disable the gate by setting `BanThreshold: 0`.
+- **403 ban detection** counts consecutive 403s after a re-login attempt. Disable the gate by setting `BanThreshold: 0`.
 
 ## Build
 

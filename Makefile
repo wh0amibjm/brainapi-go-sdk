@@ -15,7 +15,7 @@ GOFLAGS := -trimpath
 
 .PHONY: all build build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 \
         release test test-short cover lint fmt vet tidy clean help install-hooks \
-        test-register test-live-smoke
+        test-live-smoke
 
 all: lint test build ## Run lint, test, and build
 
@@ -77,10 +77,7 @@ install-hooks: ## Install pre-commit hooks (sets core.hooksPath=.githooks/)
 	@echo "  commit-msg enforces Conventional Commits 1.0."
 	@echo "  pre-push runs full -race tests + 5-target cross-compile smoke."
 
-test-register: ## Live: register a fresh @example.com account, login, persist creds. Burns a real BRAIN registration.
-	@go run ./scripts/register
-
-test-live-smoke: ## Live: 14-step read-only smoke. Requires BRAINAPI_USER/PASS pointing at a data-having secondary account.
+test-live-smoke: ## Live: 14-step read-only smoke. Requires BRAINAPI_USER/PASS pointing at a data-having test account.
 	@go run ./scripts/live-smoke
 
 help: ## Show this help

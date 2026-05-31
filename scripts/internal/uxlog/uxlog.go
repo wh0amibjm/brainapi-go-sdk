@@ -1,6 +1,6 @@
 // Package uxlog is the shared UX shell for the scripts/ live runners
-// (register, live-smoke). It standardises the N/M step framing, the
-// end-of-run summary block, and the error-to-hint mapping so the two
+// (live-smoke). It standardises the N/M step framing, the
+// end-of-run summary block, and the error-to-hint mapping so the
 // orchestrators stay surface-compatible without copy-paste.
 //
 // Not part of the public SDK -- script-local on purpose. Stderr output
@@ -74,7 +74,7 @@ func HintForError(err error) string {
 	}
 	var banned *brainapi.BannedError
 	if errors.As(err, &banned) {
-		return "Account tripped 403 ban-counter; pick another secondary account from testdata/test-accounts/accounts.json."
+		return "Account tripped 403 ban-counter; switch to a different account."
 	}
 	var persona *brainapi.PersonaInquiryError
 	if errors.As(err, &persona) {

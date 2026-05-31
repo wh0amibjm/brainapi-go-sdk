@@ -7,11 +7,9 @@
 //
 // Usage:
 //
-//	BRAINAPI_REG_EMAIL=new@example.com BRAINAPI_REG_PASS=Strong! go run ./examples/register_one
+//	BRAINAPI_REG_EMAIL=you@example.com BRAINAPI_REG_PASS=Strong! go run ./examples/register_one
 //
-// Side effect: creates a real BRAIN account. The companion live-test
-// runner (scripts/register) auto-generates the email for you and
-// also runs the post-register login/probe/self verification leg.
+// Side effect: creates a real BRAIN account.
 package main
 
 import (
@@ -30,7 +28,7 @@ func main() {
 	email := os.Getenv("BRAINAPI_REG_EMAIL")
 	pass := os.Getenv("BRAINAPI_REG_PASS")
 	if email == "" || pass == "" {
-		log.Fatal("set BRAINAPI_REG_EMAIL (preferably under @example.com) and BRAINAPI_REG_PASS")
+		log.Fatal("set BRAINAPI_REG_EMAIL and BRAINAPI_REG_PASS")
 	}
 
 	cl, err := brainapi.NewClient(brainapi.Options{

@@ -16,7 +16,7 @@ var AgreeAll = []string{
 	"challenge",
 }
 
-// Register calls POST /users to create a new secondary account. The caller supplies
+// Register calls POST /users to create a new account. The caller supplies
 // profile data; the SDK fetches a fresh Altcha PoW captcha challenge via the
 // configured CaptchaSolver and injects the encoded solution into
 // auxiliary.captcha.
