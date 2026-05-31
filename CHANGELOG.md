@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-31
+
 ### Added
 - **Before/after performance projection.** `Client.BeforeAndAfterPerformance(ctx,
   competitionID, alphaID)` and the `brainapi alphas performance <id> --competition
@@ -203,7 +205,8 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
-[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.3.0
 [0.2.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.2.0
 [0.1.2]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.1.2
