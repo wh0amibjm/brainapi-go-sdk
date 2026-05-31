@@ -15,7 +15,7 @@ GOFLAGS := -trimpath
 
 .PHONY: all build build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 \
         release test test-short cover lint fmt vet tidy clean help install-hooks \
-        test-live-smoke
+        install-skill test-live-smoke
 
 all: lint test build ## Run lint, test, and build
 
@@ -76,6 +76,9 @@ install-hooks: ## Install pre-commit hooks (sets core.hooksPath=.githooks/)
 	@echo "  pre-commit delegates to pre-commit framework (.pre-commit-config.yaml)."
 	@echo "  commit-msg enforces Conventional Commits 1.0."
 	@echo "  pre-push runs full -race tests + 5-target cross-compile smoke."
+
+install-skill: ## Install the brainapi Agent Skill into ~/.claude/skills (one-command setup)
+	@bash clients/skill/install.sh
 
 test-live-smoke: ## Live: 14-step read-only smoke. Requires BRAINAPI_USER/PASS pointing at a data-having test account.
 	@go run ./scripts/live-smoke
