@@ -203,6 +203,10 @@ Single-source-tree, no CGO, no platform-specific build tags — the same `./cmd/
 
 The endpoint shapes encoded in `pkg/brainapi/types.go` mirror the Chrome-DevTools-verified response captures pinned under [`testdata/`](testdata) and documented in [`docs/protocol.md`](docs/protocol.md). When BRAIN's protocol changes, re-capture the live shape, update the fixture and protocol notes, then port the change into the typed structs.
 
+## Disclaimer
+
+This is an **unofficial**, community-built client and is not affiliated with, endorsed by, or sponsored by WorldQuant. "WorldQuant" and "BRAIN" are trademarks of their respective owners and are used here only to describe the API this SDK talks to. Use it in accordance with the platform's Terms of Service; you are responsible for how you use your own account. The software is provided "as is", without warranty of any kind (see [`LICENSE`](LICENSE)).
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
