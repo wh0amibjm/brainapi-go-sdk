@@ -1,7 +1,7 @@
 package brainapi
 
 // Local self-correlation Pearson computation. A pure-Go reimplementation
-// of BRAIN's self-correlation semantics, so any brainapi-go
+// of BRAIN's self-correlation semantics, so any brainapi-go-sdk
 // consumer can compute self-correlation OFFLINE — no BRAIN call — and:
 //   (a) cross-check BRAIN's /alphas/{id}/correlations/self (catch endpoint drift),
 //   (b) fall back when that endpoint is flaky,

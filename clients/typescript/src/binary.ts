@@ -62,6 +62,6 @@ export function resolveBinary(explicit?: string): string {
       `  1. Pass {binary: '/path/to/brainapi'} to the Client constructor\n` +
       `  2. Set BRAINAPI_BIN env var\n` +
       `  3. Reinstall with postinstall enabled (unset BRAINAPI_SKIP_DOWNLOAD)\n` +
-      `  4. Build from source: cd brainapi-go && go build -o brainapi ./cmd/brainapi`,
+      `  4. Build from source: cd brainapi-go-sdk && go build -o brainapi ./cmd/brainapi`,
   );
 }

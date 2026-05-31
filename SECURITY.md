@@ -8,7 +8,7 @@ shipped.
 
 ## Threat model
 
-`brainapi-go` is a client SDK; it does not run a server. The threats it
+`brainapi-go-sdk` is a client SDK; it does not run a server. The threats it
 defends against are:
 
 - **Credential leakage**: the SDK never writes the email/password pair to

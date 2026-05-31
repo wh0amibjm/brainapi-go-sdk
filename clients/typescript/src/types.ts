@@ -1,4 +1,4 @@
-// Types mirror brainapi-go's response structs (see pkg/brainapi/types.go).
+// Types mirror brainapi-go-sdk's response structs (see pkg/brainapi/types.go).
 // Fields BRAIN may reshape are typed `unknown` here — see
 // docs/sdk-protocol.md "Forward-compat json.RawMessage fields" for the list.
 

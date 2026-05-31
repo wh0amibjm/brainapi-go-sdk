@@ -1,4 +1,4 @@
-# brainapi-go
+# brainapi-go-sdk
 
 A typed Go SDK + cross-platform CLI for the [WorldQuant BRAIN](https://platform.worldquantbrain.com) HTTP API.
 

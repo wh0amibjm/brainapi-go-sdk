@@ -22,7 +22,7 @@ function bail(msg, ...extra) {
   for (const line of extra) console.error(`  ${line}`);
   console.error(
     `  Set BRAINAPI_BIN at runtime to a local binary, OR rebuild from source:`,
-    `cd brainapi-go && go build -o brainapi ./cmd/brainapi`,
+    `cd brainapi-go-sdk && go build -o brainapi ./cmd/brainapi`,
   );
   process.exit(0);
 }

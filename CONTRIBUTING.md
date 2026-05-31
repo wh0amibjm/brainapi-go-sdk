@@ -6,7 +6,7 @@ Thanks for considering a contribution. A few ground rules.
 
 ```bash
 git clone https://github.com/wh0amibjm/brainapi-go-sdk.git
-cd brainapi-go
+cd brainapi-go-sdk
 go mod download
 
 # Install hooks (uses .pre-commit-config.yaml if pre-commit is installed,

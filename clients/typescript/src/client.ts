@@ -163,7 +163,7 @@ export class Client {
    * Backtest = createSimulation -> waitSimulation -> (if alpha) getAlpha.
    * Returns the terminal sim status and the alpha record if one was produced.
    * Terminates on sim.alpha !== '' (covers COMPLETE / WARNING-with-alpha cases),
-   * matching brainapi-go's WaitForSimulation contract.
+   * matching brainapi-go-sdk's WaitForSimulation contract.
    */
   backtest = async (
     expression: string,
@@ -188,7 +188,7 @@ export class Client {
   // ---------- escape hatch ----------
   /**
    * Run any brainapi subcommand. Use this when the wrapper hasn't added a
-   * typed method yet (e.g. after a brainapi-go release adds a new command).
+   * typed method yet (e.g. after a brainapi-go-sdk release adds a new command).
    * Stdin is optional and consumed verbatim; the binary always emits a
    * JSON envelope which this method unwraps and returns as T.
    */

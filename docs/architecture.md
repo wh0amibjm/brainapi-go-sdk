@@ -1,6 +1,6 @@
 # Architecture
 
-`brainapi-go` is a thin, typed Go wrapper around the WorldQuant BRAIN HTTP API. This doc explains the design choices a reader is most likely to want to challenge.
+`brainapi-go-sdk` is a thin, typed Go wrapper around the WorldQuant BRAIN HTTP API. This doc explains the design choices a reader is most likely to want to challenge.
 
 ## Layering
 

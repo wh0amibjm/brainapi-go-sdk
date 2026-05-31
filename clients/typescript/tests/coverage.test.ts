@@ -1,5 +1,5 @@
 // Drift-detection: every leaf command emitted by `brainapi describe` must
-// have a wrapper method. If brainapi-go adds a new subcommand, this test
+// have a wrapper method. If brainapi-go-sdk adds a new subcommand, this test
 // fails until the wrapper is updated. Conversely, removing a wrapper while
 // the binary still ships the command is also caught.
 
