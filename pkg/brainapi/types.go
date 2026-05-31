@@ -152,6 +152,51 @@ type SelfCorrelationBlock struct {
 	Max *float64 `json:"max,omitempty"`
 }
 
+// PerformanceStats is one side (before or after) of a BeforeAndAfterPerformance
+// comparison: the aggregate metrics the alpha would carry.
+type PerformanceStats struct {
+	BookSize   float64 `json:"bookSize"`
+	PnL        float64 `json:"pnl"`
+	LongCount  int     `json:"longCount"`
+	ShortCount int     `json:"shortCount"`
+	Drawdown   float64 `json:"drawdown"`
+	Turnover   float64 `json:"turnover"`
+	Returns    float64 `json:"returns"`
+	Margin     float64 `json:"margin"`
+	Sharpe     float64 `json:"sharpe"`
+	Fitness    float64 `json:"fitness"`
+}
+
+// BeforeAndAfterPerformance is the body of
+// GET /competitions/{cid}/alphas/{aid}/before-and-after-performance — the
+// projected impact of submitting an unsubmitted alpha into a competition (the
+// "Performance Comparison" panel on the unsubmitted-alpha page).
+//
+// Score is the competition score (e.g. Delay-1) before vs after submission.
+// Stats holds the aggregate metrics per side. YearlyStats.{Before,After} and PnL
+// are positional RecordSetBlocks — decode via Schema.Properties[*].Name; the PnL
+// columns are date, beforePnL, afterPnL. Competition and Team are kept raw, same
+// as Alpha.Competitions / Alpha.Team.
+type BeforeAndAfterPerformance struct {
+	PartitionName string `json:"partitionName"`
+	Score         struct {
+		Before float64 `json:"before"`
+		After  float64 `json:"after"`
+	} `json:"score"`
+	Stats struct {
+		Before PerformanceStats `json:"before"`
+		After  PerformanceStats `json:"after"`
+	} `json:"stats"`
+	YearlyStats struct {
+		Before RecordSetBlock `json:"before"`
+		After  RecordSetBlock `json:"after"`
+	} `json:"yearlyStats"`
+	PnL         RecordSetBlock  `json:"pnl"`
+	Competition json.RawMessage `json:"competition,omitempty"`
+	Team        json.RawMessage `json:"team,omitempty"`
+	Partition   []string        `json:"partition,omitempty"`
+}
+
 // RecordSchema describes the columnar shape of RecordSetBlock.Records.
 type RecordSchema struct {
 	Name       string           `json:"name,omitempty"`

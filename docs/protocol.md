@@ -28,6 +28,7 @@ Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-Dev
 | POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
 | GET | `/alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` |
 | GET | `/alphas/{id}/correlations/self` | `Client.AlphaSelfCorrelation` |
+| GET | `/competitions/{cid}/alphas/{id}/before-and-after-performance` | `Client.BeforeAndAfterPerformance` |
 | POST | `/simulations` | `Client.CreateSimulation` |
 | GET | `/simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` |
 | GET | `/operators` | `Client.Operators` |

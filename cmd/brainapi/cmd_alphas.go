@@ -22,6 +22,7 @@ func newAlphasCmd() *cobra.Command {
 		newAlphaCorrCmd(),
 		newAlphaCorrLocalCmd(),
 		newAlphaListCmd(),
+		newAlphaPerformanceCmd(),
 	)
 	return cmd
 }
@@ -177,6 +178,37 @@ func newAlphaPnLCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newAlphaPerformanceCmd() *cobra.Command {
+	var competition string
+	cmd := &cobra.Command{
+		Use:   "performance <alpha-id> --competition <id>",
+		Short: "GET /competitions/{cid}/alphas/{id}/before-and-after-performance: projected submit impact (competition score + stats, before vs after)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if competition == "" {
+				writeErr(fmt.Errorf("--competition is required (e.g. IQC2026S2)"))
+				return nil
+			}
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			p, err := cl.BeforeAndAfterPerformance(ctx, competition, args[0])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(p)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&competition, "competition", "", "Competition id the alpha would be submitted to, e.g. IQC2026S2 (required)")
+	return cmd
 }
 
 func newAlphaListCmd() *cobra.Command {

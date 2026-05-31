@@ -115,6 +115,7 @@ Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CL
 | `GET /alphas/{id}/check` | `Client.CheckAlpha` | `alphas check` | [terminal](testdata/check_alpha_terminal.json) |
 | `POST + GET /alphas/{id}/submit` | `Client.SubmitAlpha` | `alphas submit` | [200 pending](testdata/submit_200_pending.json) / [403 corr-fail](testdata/submit_403_corr_fail.json) |
 | `GET /alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` | `alphas pnl` | [pnl](testdata/recordsets_pnl.json) |
+| `GET /competitions/{cid}/alphas/{id}/before-and-after-performance` | `Client.BeforeAndAfterPerformance` | `alphas performance --competition <cid>` | [perf](testdata/before_and_after_performance.json) |
 | `GET /users/self/alphas` | `Client.ListAlphas` / `ListAlphasAll` | `alphas list [--all]` | [page](testdata/users_alphas_page.json) |
 | `POST /simulations` | `Client.CreateSimulation` | `simulations create` | _(returns 201 with `Location` header only)_ |
 | `GET /simulations/{id}` | `Client.GetSimulation` / `WaitForSimulation` | `simulations get` / `wait` | [in-progress](testdata/simulation_in_progress.json) / [complete](testdata/simulation_complete.json) |

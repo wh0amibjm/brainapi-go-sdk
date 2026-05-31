@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Before/after performance projection.** `Client.BeforeAndAfterPerformance(ctx,
+  competitionID, alphaID)` and the `brainapi alphas performance <id> --competition
+  <cid>` command wrap `GET /competitions/{cid}/alphas/{id}/before-and-after-performance`
+  — the "Performance Comparison" panel on the unsubmitted-alpha page. Returns the
+  competition score (e.g. Delay-1) before vs after submission, plus aggregate stats,
+  per-year stats, and a daily before/after PnL series — each side a before-vs-after
+  pair. Cold-cache long-polled (503 / 200-empty + Retry-After) like the recordset
+  endpoints; free of submit-budget cost. New types `BeforeAndAfterPerformance` and
+  `PerformanceStats`. Endpoint + schema **live-confirmed 2026-05-31** via Chrome
+  DevTools against an unsubmitted IQC2026S2 alpha.
 - **Notification feed.** `Client.Messages(ctx, opts)` / `Client.MessagesAll(ctx, opts)`
   and the `brainapi messages list` command wrap `GET /users/self/messages` — the
   feed behind the BRAIN notification center

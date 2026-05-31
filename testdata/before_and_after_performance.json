@@ -1,0 +1,64 @@
+{
+  "partitionName": "EQUITY:1",
+  "stats": {
+    "before": {"bookSize": 20000000, "pnl": 7349340.0, "longCount": 1112, "shortCount": 1099, "drawdown": 0.0259, "turnover": 0.1969, "returns": 0.1487, "margin": 0.00151, "sharpe": 4.36, "fitness": 3.79},
+    "after": {"bookSize": 20000000, "pnl": 7406153.0, "longCount": 1107, "shortCount": 1098, "drawdown": 0.0258, "turnover": 0.196, "returns": 0.1498, "margin": 0.001529, "sharpe": 4.38, "fitness": 3.83}
+  },
+  "yearlyStats": {
+    "before": {
+      "schema": {"name": "yearly-stats", "title": "Yearly Stats", "properties": [
+        {"name": "year", "title": "Year", "type": "year"},
+        {"name": "pnl", "title": "PnL", "type": "amount"},
+        {"name": "bookSize", "title": "Book Size", "type": "amount"},
+        {"name": "longCount", "title": "Long Count", "type": "integer"},
+        {"name": "shortCount", "title": "Short Count", "type": "integer"},
+        {"name": "turnover", "title": "Turnover", "type": "percent"},
+        {"name": "sharpe", "title": "Sharpe", "type": "decimal"},
+        {"name": "returns", "title": "Returns", "type": "percent"},
+        {"name": "drawdown", "title": "Drawdown", "type": "percent"},
+        {"name": "margin", "title": "Margin", "type": "permyriad"},
+        {"name": "fitness", "title": "Fitness", "type": "decimal"},
+        {"name": "stage", "title": "Stage", "type": "string"}
+      ]},
+      "records": [
+        ["2019", 857343, 20000000, 1080, 1061, 0.2019, 4.09, 0.0851, 0.0106, 0.000843, 2.66, "IS"],
+        ["2020", 1281358, 20000000, 1107, 1121, 0.1971, 3.86, 0.1387, 0.0259, 0.001407, 3.24, "IS"]
+      ]
+    },
+    "after": {
+      "schema": {"name": "yearly-stats", "title": "Yearly Stats", "properties": [
+        {"name": "year", "title": "Year", "type": "year"},
+        {"name": "pnl", "title": "PnL", "type": "amount"},
+        {"name": "bookSize", "title": "Book Size", "type": "amount"},
+        {"name": "longCount", "title": "Long Count", "type": "integer"},
+        {"name": "shortCount", "title": "Short Count", "type": "integer"},
+        {"name": "turnover", "title": "Turnover", "type": "percent"},
+        {"name": "sharpe", "title": "Sharpe", "type": "decimal"},
+        {"name": "returns", "title": "Returns", "type": "percent"},
+        {"name": "drawdown", "title": "Drawdown", "type": "percent"},
+        {"name": "margin", "title": "Margin", "type": "permyriad"},
+        {"name": "fitness", "title": "Fitness", "type": "decimal"},
+        {"name": "stage", "title": "Stage", "type": "string"}
+      ]},
+      "records": [
+        ["2019", 870000, 20000000, 1075, 1058, 0.2010, 4.12, 0.0860, 0.0105, 0.000850, 2.70, "IS"],
+        ["2020", 1290000, 20000000, 1100, 1118, 0.1965, 3.90, 0.1395, 0.0258, 0.001420, 3.30, "IS"]
+      ]
+    }
+  },
+  "pnl": {
+    "schema": {"name": "pnl", "title": "PnL", "properties": [
+      {"name": "date", "title": "Date", "type": "date"},
+      {"name": "beforePnL", "title": "Before PnL", "type": "amount"},
+      {"name": "afterPnL", "title": "After PnL", "type": "amount"}
+    ]},
+    "records": [
+      ["2019-01-02", 16030, 15789],
+      ["2019-01-03", 26419, 26502]
+    ]
+  },
+  "score": {"before": 9566, "after": 9662},
+  "competition": {"id": "IQC2026S2", "name": "International Quant Championship 2026 Stage 2", "scoring": "PERFORMANCE"},
+  "team": {"id": "TEAM0000", "type": "IQC2026S1", "name": "ANON0000", "university": "not applicable"},
+  "partition": ["competition"]
+}
