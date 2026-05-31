@@ -1,26 +1,19 @@
 name: live-smoke
 
-# Weekly scheduled live BRAIN integration check.
-# Catches silent BRAIN-side schema upgrades (the v0.1.1 *string -> object
-# class of bugs) before they bite production.
+# Live BRAIN integration check — catches silent BRAIN-side schema upgrades
+# (the v0.1.1 *string -> object class of bugs) before they bite production.
 #
-# Requires repo secrets:
-#   BRAINAPI_USER  (account email)
-#   BRAINAPI_PASS  (account password)
+# Manual-only in this repo: it intentionally does NOT run on a schedule and
+# ships with no BRAINAPI_USER/PASS secrets, so a real account is never pointed
+# at a public Actions log. The recurring schema-drift watch runs on a private
+# mirror instead. To run it ad hoc against your own throwaway test account, set
+# the two secrets and trigger it from the Actions tab:
+#   BRAINAPI_USER  (account email)    BRAINAPI_PASS  (account password)
+#   gh secret set BRAINAPI_USER --body "..."   (likewise BRAINAPI_PASS)
 #
-# Set via: gh secret set BRAINAPI_USER --body "..."
-#          gh secret set BRAINAPI_PASS --body "..."
-#
-# On failure: opens a GitHub issue with the workflow run link and
-# triage instructions. Issue is opened with default labels only --
-# add `schema-drift` etc. by hand if you want them grouped.
+# On failure: opens a GitHub issue with the workflow run link and triage notes.
 
 on:
-  schedule:
-    # Monday 07:00 UTC ≈ Sunday 03:00 EST. Picks a time when BRAIN's own
-    # 3AM-ET challenge-day rollover is well past, so daily counters
-    # observed by this run are stable for the new day.
-    - cron: '0 7 * * 1'
   workflow_dispatch: {}
 
 permissions:
