@@ -99,11 +99,12 @@ func buildDescribeSpec(root *cobra.Command) describeSpec {
 // spec (the long-poll contract is the wrapper-relevant fact; the builder
 // just cares about wiring).
 var longPollCommands = map[string]bool{
-	"alphas check":     true,
-	"alphas submit":    true,
-	"alphas pnl":       true,
-	"alphas corr":      true,
-	"simulations wait": true,
+	"alphas check":       true,
+	"alphas submit":      true,
+	"alphas pnl":         true,
+	"alphas corr":        true,
+	"alphas performance": true,
+	"simulations wait":   true,
 }
 
 func walkCommands(c *cobra.Command, prefix []string) []commandSpec {
@@ -240,6 +241,12 @@ var staticContracts = []contractSpec{
 		Topic:   "alphas corr",
 		Summary: "GET /alphas/{id}/correlations/self returns {schema,records,min,max} after a 503-queued long-poll (cached after first run). Gate SubmitAlpha on max < 0.7 — same threshold as the post-submit SELF_CORRELATION check, but free of submit-budget cost. /correlations/prod is 403 on IQC consultant tier through July 2026.",
 		Ref:     "docs/sdk-protocol.md",
+	},
+	{
+		ID:      "before-after-performance",
+		Topic:   "alphas performance",
+		Summary: "GET /competitions/{cid}/alphas/{id}/before-and-after-performance projects submit impact after a 503-queued long-poll: {score:{before,after}, stats:{before,after}, yearlyStats:{before,after}, pnl}. Competition-scoped — caller supplies the competition id. yearlyStats.{before,after} and pnl are positional {schema,records} blocks; pnl columns are date, beforePnL, afterPnL. Free of submit-budget cost.",
+		Ref:     "docs/protocol.md",
 	},
 	{
 		ID:      "list-endpoint-envelopes-diverge",

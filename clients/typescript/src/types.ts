@@ -34,9 +34,10 @@ export interface UserInfo {
 
 export interface AlphaCheck {
   name: string;
-  result: string;
+  result: string; // PASS | WARNING | FAIL | PENDING | ERROR
   value?: number;
   limit?: number;
+  message?: string; // human-readable note on WARNING / non-numeric checks (e.g. REVERSION_COMPONENT)
 }
 
 export interface Alpha {

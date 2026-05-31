@@ -72,6 +72,10 @@ export class Client {
   checkAlpha = (id: string): Promise<unknown> => this.run<unknown>(['alphas', 'check', id]);
   submitAlpha = (id: string): Promise<Verdict> => this.run<Verdict>(['alphas', 'submit', id]);
   alphaPnl = (id: string): Promise<unknown> => this.run<unknown>(['alphas', 'pnl', id]);
+  // Projected submit impact: GET /competitions/{cid}/alphas/{id}/before-and-after-performance.
+  // Competition score + stats/yearly/pnl, before vs after submitting into the competition.
+  alphaPerformance = (id: string, competition: string): Promise<unknown> =>
+    this.run<unknown>(['alphas', 'performance', id, '--competition', competition]);
   // Server-side self-corr: GET /alphas/{id}/correlations/self. Gate submission
   // on `max < 0.7`.
   alphaCorr = (id: string): Promise<SelfCorrelationBlock> =>
