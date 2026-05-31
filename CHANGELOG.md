@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   multi-MB base64 images — transported verbatim; strip before size-sensitive
   use. See `docs/protocol.md`.
 
+### Fixed
+- **`check` WARNING checks now fully decode.** `Check.Message` was missing, so the
+  human-readable note on non-numeric checks (e.g. the `REVERSION_COMPONENT`
+  WARNING — "Alpha expression includes a reversion component…") was silently
+  dropped. Added the `Message` field and documented `WARNING` as a valid
+  `Check.Result` value (alongside PASS/FAIL/PENDING/ERROR). Confirmed live
+  2026-05-31 against an unsubmitted alpha whose `check` returned 8 PASS + 1 WARNING.
+
 ## [0.3.0] - 2026-05-21
 
 ### Added

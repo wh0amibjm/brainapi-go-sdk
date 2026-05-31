@@ -123,10 +123,14 @@ type IsBlock struct {
 
 // Check is one item of IsBlock.Checks.
 type Check struct {
-	Name         string          `json:"name"`
-	Result       string          `json:"result"` // PASS | FAIL | PENDING | ERROR
-	Limit        *float64        `json:"limit,omitempty"`
-	Value        *float64        `json:"value,omitempty"`
+	Name   string   `json:"name"`
+	Result string   `json:"result"` // PASS | WARNING | FAIL | PENDING | ERROR
+	Limit  *float64 `json:"limit,omitempty"`
+	Value  *float64 `json:"value,omitempty"`
+	// Message is a human-readable note carried by non-numeric checks — set on
+	// WARNING / informational results (e.g. REVERSION_COMPONENT) that have no
+	// limit/value pair. Empty for the usual threshold checks.
+	Message      string          `json:"message,omitempty"`
 	Competitions json.RawMessage `json:"competitions,omitempty"`
 }
 

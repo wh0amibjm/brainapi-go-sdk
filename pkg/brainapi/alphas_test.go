@@ -54,6 +54,25 @@ func TestCheckAlpha_LongPollThenTerminal(t *testing.T) {
 	if calls.Load() != 3 {
 		t.Errorf("expected 3 polls, got %d", calls.Load())
 	}
+
+	// A WARNING check (REVERSION_COMPONENT) carries a human-readable Message and
+	// no numeric limit/value — make sure both decode rather than getting dropped.
+	var sawWarning bool
+	for _, c := range is.Checks {
+		if c.Result != "WARNING" {
+			continue
+		}
+		sawWarning = true
+		if c.Name != "REVERSION_COMPONENT" || c.Message == "" {
+			t.Errorf("WARNING check = %+v, want REVERSION_COMPONENT with non-empty Message", c)
+		}
+		if c.Limit != nil || c.Value != nil {
+			t.Errorf("WARNING check should have nil limit/value, got %+v", c)
+		}
+	}
+	if !sawWarning {
+		t.Error("expected a WARNING check in the fixture")
+	}
 }
 
 func TestSubmitAlpha_CorrRejected(t *testing.T) {
