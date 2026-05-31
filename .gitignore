@@ -19,6 +19,7 @@ testdata/test-accounts/
 # AI tooling (locally generated)
 .serena/
 AGENTS.md
+.claude/
 
 # Defense-in-depth: catch sensitive material that doesn't fit any of the
 # specific paths above. None of these patterns describe a file that
