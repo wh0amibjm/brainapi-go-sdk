@@ -19,7 +19,9 @@ go get github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi
 go install github.com/wh0amibjm/brainapi-go-sdk/cmd/brainapi@latest
 ```
 
-Or grab a pre-built binary from the `bin/` directory after `make release`.
+Or download a pre-built binary (with `SHA256SUMS.txt`) for your platform from the
+[**Releases**](https://github.com/wh0amibjm/brainapi-go-sdk/releases) page. To build
+locally instead, run `make release` — the binaries land in `bin/`.
 
 ## CLI quick-start
 
