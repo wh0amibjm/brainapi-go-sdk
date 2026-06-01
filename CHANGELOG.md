@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-01
+
 ### Added
 - **MCP server.** New `cmd/brainapi-mcp` binary exposes the SDK as a
   [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
