@@ -39,9 +39,12 @@ jobs:
             arch="${target#*/}"
             ext=""
             [ "$os" = "windows" ] && ext=".exe"
-            out="brainapi-${VERSION}-${os}-${arch}${ext}"
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 \
-              go build -trimpath -ldflags="$LDFLAGS" -o "bin/$out" ./cmd/brainapi
+              go build -trimpath -ldflags="$LDFLAGS" \
+                -o "bin/brainapi-${VERSION}-${os}-${arch}${ext}" ./cmd/brainapi
+            GOOS=$os GOARCH=$arch CGO_ENABLED=0 \
+              go build -trimpath -ldflags="$LDFLAGS" \
+                -o "bin/brainapi-mcp-${VERSION}-${os}-${arch}${ext}" ./cmd/brainapi-mcp
           done
           (cd bin && sha256sum * > SHA256SUMS.txt)
           ls -lh bin/
