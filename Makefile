@@ -1,4 +1,5 @@
 BINARY     := brainapi
+MCP_BINARY := brainapi-mcp
 MODULE     := github.com/wh0amibjm/brainapi-go-sdk
 PKG_VER    := $(MODULE)/internal/version
 
@@ -13,14 +14,17 @@ LDFLAGS := -s -w \
 
 GOFLAGS := -trimpath
 
-.PHONY: all build build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 \
-        release test test-short cover lint fmt vet tidy clean help install-hooks \
+.PHONY: all build build-mcp build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 \
+        release release-mcp test test-short cover lint fmt vet tidy clean help install-hooks \
         install-skill test-live-smoke
 
-all: lint test build ## Run lint, test, and build
+all: lint test build build-mcp ## Run lint, test, and build both binaries
 
-build: ## Build for current platform
+build: ## Build the CLI for current platform
 	go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(BINARY) ./cmd/brainapi
+
+build-mcp: ## Build the MCP server for current platform
+	go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(MCP_BINARY) ./cmd/brainapi-mcp
 
 build-linux: ## Cross-compile for linux/amd64
 	GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-linux-amd64 ./cmd/brainapi
@@ -37,7 +41,15 @@ build-darwin: ## Cross-compile for darwin/amd64
 build-darwin-arm64: ## Cross-compile for darwin/arm64
 	GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-darwin-arm64 ./cmd/brainapi
 
-release: build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 ## Build all release binaries
+release: build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 release-mcp ## Build all release binaries (CLI + MCP, five targets each)
+
+release-mcp: ## Cross-compile the MCP server for all five targets
+	@for t in linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64; do \
+	  os=$${t%/*}; arch=$${t#*/}; ext=; [ "$$os" = windows ] && ext=.exe; \
+	  echo "==> $(MCP_BINARY) $$os/$$arch"; \
+	  GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 \
+	    go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(MCP_BINARY)-$$os-$$arch$$ext ./cmd/brainapi-mcp; \
+	done
 
 test: ## Run tests with race detector
 	go test -race -count=1 ./...

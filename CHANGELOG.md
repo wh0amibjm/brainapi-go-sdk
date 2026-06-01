@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MCP server.** New `cmd/brainapi-mcp` binary exposes the SDK as a
+  [Model Context Protocol](https://modelcontextprotocol.io) server over stdio,
+  embedding `pkg/brainapi` directly (no subprocess-per-call). Built on the official
+  `github.com/modelcontextprotocol/go-sdk` v1.6.1. Registers **20 read-only (GET)
+  tools** by default; the **10 mutating tools** (`submit_alpha`, `simulations_create`,
+  `register`, `login`, `logout`, `email_verify`, `email_reverify`, `password_forgot`,
+  `password_reset`, `persona_complete`) are gated behind `--enable-writes`.
+  `submit_alpha` is doubly gated: it runs the self-correlation gate (`max < 0.7`)
+  and requires `confirm=true`, else returns a dry-run. Credentials via
+  `BRAINAPI_USER` / `BRAINAPI_PASS`; logs to stderr, JSON-RPC on stdout. The
+  `make release` / release workflow now cross-compiles and ships `brainapi-mcp`
+  alongside `brainapi` for all five targets.
+
 ## [0.4.0] - 2026-05-31
 
 ### Added

@@ -103,6 +103,48 @@ month-to-date not today; BRAIN day rolls at 3 AM ET; etc.).
 The bundled TypeScript client under [`clients/typescript/`](clients/typescript) is
 the reference wrapper — see its envelope parser, typed-exception hierarchy, and execa plumbing.
 
+## MCP server
+
+For AI agents, `cmd/brainapi-mcp` exposes the same SDK as an [MCP](https://modelcontextprotocol.io)
+server over stdio — no subprocess-per-call, it embeds `pkg/brainapi` directly.
+
+```bash
+go install github.com/wh0amibjm/brainapi-go-sdk/cmd/brainapi-mcp@latest
+# or build locally:  make build-mcp   → bin/brainapi-mcp
+```
+
+(or grab the pre-built `brainapi-mcp-<version>-<os>-<arch>` from the
+[Releases](https://github.com/wh0amibjm/brainapi-go-sdk/releases) page.)
+
+Register it with any MCP client using the standard config block. Credentials go in
+the `env` block (the server reads `BRAINAPI_USER` / `BRAINAPI_PASS`); all logs go to
+stderr, so stdout stays pure JSON-RPC:
+
+```json
+{
+  "mcpServers": {
+    "brainapi": {
+      "command": "/path/to/brainapi-mcp",
+      "args": [],
+      "env": {
+        "BRAINAPI_USER": "me@example.com",
+        "BRAINAPI_PASS": "hunter2"
+      }
+    }
+  }
+}
+```
+
+**Read-only by default.** The server registers **20 read-only (GET) tools**
+(`probe`, `whoami`, `operators`, `get_alpha`, `check_alpha`, `self_correlation`,
+`alpha_pnl`, `list_alphas`, `data_fields`, `get_simulation`, … ). The **10 mutating
+tools** (`submit_alpha`, `simulations_create`, `register`, `login`, `logout`,
+`email_verify`, `email_reverify`, `password_forgot`, `password_reset`,
+`persona_complete`) are registered **only when you pass `--enable-writes`** in
+`args`. `submit_alpha` is doubly gated even then: it runs the self-correlation gate
+(`max < 0.7`) first and requires `confirm=true`, otherwise it returns a dry-run and
+spends no daily slot.
+
 ## Endpoint coverage
 
 Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CLI subcommand. The **Example** column links to the canonical response fixture in `testdata/` — wrappers can use these to bootstrap typed models without reading Go source.
@@ -186,8 +228,8 @@ These caveats — captured by Chrome DevTools auditing against `platform.worldqu
 ## Build
 
 ```bash
-make all          # lint, test, build for the current platform
-make release      # cross-compile all five (linux x{amd64,arm64}, windows amd64, darwin x{amd64,arm64})
+make all          # lint, test, build both binaries (CLI + MCP) for the current platform
+make release      # cross-compile both binaries for all five (linux x{amd64,arm64}, windows amd64, darwin x{amd64,arm64})
 make cover        # coverage report
 make install-hooks  # git pre-commit via .githooks/
 pre-commit run --all-files   # equivalent, using the pre-commit framework
