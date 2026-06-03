@@ -93,11 +93,9 @@ func (c *Client) WaitForSimulation(ctx context.Context, id string) (*Simulation,
 		if s.Alpha != "" || s.Status == "FAIL" || s.Status == "ERROR" {
 			return s, nil
 		}
-		d, _ := parseRetryAfter("") // GetSimulation strips headers; default longPollFloor
-		if d <= 0 {
-			d = longPollFloor * 10 // 5s default
-		}
-		d = clamp(d, longPollFloor, longPollCeiling)
+		// GetSimulation discards response headers, so no Retry-After is
+		// available here; poll on the fixed long-poll default (5s), clamped.
+		d := clamp(longPollFloor*10, longPollFloor, longPollCeiling)
 		if err := sleepCtx(ctx, d); err != nil {
 			return nil, err
 		}

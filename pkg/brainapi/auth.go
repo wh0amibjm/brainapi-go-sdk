@@ -2,7 +2,6 @@ package brainapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
@@ -110,11 +109,8 @@ func (c *Client) CompletePersona(ctx context.Context, inquiry, email, password s
 		path:   "/authentication/persona",
 		body:   personaBody{Inquiry: inquiry},
 	}); err != nil {
-		// Persona-completion endpoint shapes aren't fully spec'd; surface as APIError.
-		var ae *APIError
-		if errors.As(err, &ae) {
-			return nil, err
-		}
+		// Persona-completion endpoint shapes aren't fully spec'd; surface the
+		// error unchanged (a non-2xx is already typed as *APIError by do()).
 		return nil, err
 	}
 	return c.Login(ctx, email, password)
