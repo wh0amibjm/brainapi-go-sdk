@@ -8,7 +8,15 @@
 // throws with the same instructions if the binary is missing at runtime.
 
 import { createHash } from 'node:crypto';
-import { createWriteStream, mkdirSync, chmodSync, readFileSync, existsSync } from 'node:fs';
+import {
+  createWriteStream,
+  mkdirSync,
+  chmodSync,
+  readFileSync,
+  existsSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
@@ -59,6 +67,19 @@ if (existsSync(outPath)) {
 
 console.log(`[brainapi-postinstall] fetching ${filename}`);
 
+// Download to a temp file alongside the final path, verify, then atomically
+// promote. This guarantees an unverified/corrupt binary never lingers at
+// outPath where the existsSync skip-guard above and the runtime resolver would
+// later execute it without re-checking.
+const tmpPath = `${outPath}.download.${process.pid}`;
+const cleanupTmp = () => {
+  try {
+    if (existsSync(tmpPath)) unlinkSync(tmpPath);
+  } catch {
+    // best-effort
+  }
+};
+
 try {
   const sumsResp = await fetch(sumsUrl);
   if (!sumsResp.ok) bail(`SHA256SUMS.txt fetch HTTP ${sumsResp.status}`, `URL: ${sumsUrl}`);
@@ -83,14 +104,17 @@ try {
         yield chunk;
       }
     },
-    createWriteStream(outPath),
+    createWriteStream(tmpPath),
   );
   const got = hasher.digest('hex');
   if (got !== expected[1]) {
+    cleanupTmp();
     bail(`SHA mismatch — expected ${expected[1]}, got ${got}`);
   }
-  if (goos !== 'windows') chmodSync(outPath, 0o755);
+  if (goos !== 'windows') chmodSync(tmpPath, 0o755);
+  renameSync(tmpPath, outPath); // atomic promote of the verified binary
   console.log(`[brainapi-postinstall] installed ${outPath} (sha256 verified)`);
 } catch (e) {
+  cleanupTmp();
   bail(`download failed: ${e.message}`);
 }
