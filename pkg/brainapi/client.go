@@ -127,6 +127,10 @@ type Client struct {
 	budgetDay  string
 	budgetSims int
 	budgetSubs int
+
+	// now is the clock used for budget-day attribution. Defaults to time.Now;
+	// overridable in tests for deterministic day-rollover assertions.
+	now func() time.Time
 }
 
 // NewClient constructs a Client from Options. Returns an error only if the
@@ -184,6 +188,7 @@ func NewClient(opts Options) (*Client, error) {
 		email:             opts.Email,
 		password:          opts.Password,
 		simSem:            make(chan struct{}, opts.MaxConcurrentSims),
+		now:               time.Now,
 	}
 
 	tls, err := newTLSHTTP(c.profile, c.proxy, c.timeout, c.cookieJarPath, c.baseURL, c.logger)
@@ -282,7 +287,7 @@ func (c *Client) reserveSimSlot(ctx context.Context) (func(), error) {
 // checkBudget enforces the daily quota gate. kind is "sim" or "submit".
 // Returns ErrDailyBudgetExhausted if the gate is set and exceeded.
 func (c *Client) checkBudget(kind string) error {
-	day := challengeDayStr(time.Now())
+	day := challengeDayStr(c.now())
 	c.budgetMu.Lock()
 	defer c.budgetMu.Unlock()
 	if c.budgetDay != day {
