@@ -94,7 +94,7 @@ The default `MaxConcurrentSims=2` is a conservative main-account default. Second
 
 Multi-process callers (e.g. a fleet of `brainapi alphas submit` invocations from a scheduler) need external coordination. The SDK refuses to fake it. The in-process counter exists for **single-process** programs that submit/simulate in a loop and want a safety net.
 
-The day boundary at 3 AM ET is BRAIN's own; we mirror it via `time.LoadLocation("America/New_York")`. If TZ data isn't installed (rare on Windows), we fall back to UTC and the counter resets at UTC midnight — not perfectly aligned but never *worse* than no gate.
+The challenge-day boundary is BRAIN's own: each call is attributed to its EDT (fixed UTC-4) calendar day by the **midnight** boundary, i.e. 04:00 UTC year-round. `challengeDayStr` computes this with a fixed `-4h` offset and a date format — deliberately **not** `time.LoadLocation`/DST-aware: BRAIN's own `dateSubmitted` carries an explicit `-04:00` offset confirming the fixed offset, and there's no EST fallback in winter. (The 3 AM ET event some BRAIN docs mention is only the challenge/data refresh, *not* the day-attribution boundary — an earlier `-3h` shift here mis-filed every 00:00–03:00 EDT call into the previous day.) The TS helper `brainDay()` mirrors this exactly.
 
 ## Why the protocol notes live next to the fixtures
 
