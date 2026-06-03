@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-03
+
+### Security
+- **Bumped `golang.org/x/net` to v0.55.0**, resolving a reachable advisory
+  (`GO-2026-5026`, idna) reached through the TLS client's request path. Surfaced
+  by a new `govulncheck` CI gate (plus a `make vuln` target).
+- **npm postinstall integrity.** The downloaded binary is now hashed in a temp
+  file and atomically promoted (`renameSync`) only after SHA256 verification, so
+  a mismatch can no longer leave an unverified binary at the bundled path where
+  the next install's skip-guard / the runtime resolver would execute it.
+
+### Fixed
+- **Long-poll no longer consumes the error-retry budget.** The transport retry
+  loop shared a single `attempt` counter between long-poll iterations and error
+  retries, so once an endpoint had long-polled past `MaxRetries` (`CheckAlpha`
+  caps at 30, `AlphaSelfCorrelation` at 60), the next transient 500 / 429 /
+  network error mid-poll was surfaced as terminal instead of retried — the SDK's
+  retry resilience silently evaporated partway through every multi-minute poll.
+  Error retries and long-poll ticks now use independent counters.
+- **`RetryKindUnauthorized` is now emitted on the 401 auto-relogin path** — it
+  was the only retry branch the loop took without an `ObserveRetry` callback (a
+  defined-but-unused constant), so metrics/tracing missed every transparent
+  re-login.
+- **TypeScript client: a large stdin payload plus an early child exit no longer
+  crashes the host process.** `spawnCapture` now attaches a benign `child.stdin`
+  error handler, so an EPIPE surfaces as the child's real exit outcome via the
+  `close` event instead of an unhandled stream error. The 2s SIGKILL grace timer
+  is also cleared and `unref()`'d so it no longer keeps the event loop alive
+  ~2s after a timeout.
+
+### Changed
+- CI hardening: `gofumpt` is pinned (was `@latest`, a non-reproducible gate),
+  and the coverage step is now a hard 78% floor on `pkg/...` instead of
+  print-only.
+- Removed dead code in `CompletePersona` (a no-op `errors.As` branch) and
+  `WaitForSimulation` (a `parseRetryAfter("")` that always returned the zero
+  default). No behavior change.
+- Added regression coverage for the long-poll/error interaction, daily-budget
+  day rollover (with `challengeDayStr` boundary cases and a small injectable
+  clock seam), the `WaitForSimulation` long-poll cap, the `MaxConcurrentSims`
+  semaphore bound and cancel-while-queued path, auto-relogin observability, and
+  the submit 303 "still processing" keep-polling path.
+
+### Docs
+- Corrected the daily-budget day-boundary note in `docs/architecture.md`: the
+  attribution boundary is a fixed UTC-4 midnight (04:00 UTC year-round), not the
+  3 AM ET `time.LoadLocation` behavior the prose previously described.
+
 ## [0.5.0] - 2026-06-01
 
 ### Added
@@ -221,7 +269,9 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
-[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.3.0
 [0.2.0]: https://github.com/wh0amibjm/brainapi-go-sdk/releases/tag/v0.2.0
