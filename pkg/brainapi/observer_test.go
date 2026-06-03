@@ -3,6 +3,7 @@ package brainapi_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -117,6 +118,56 @@ func TestObserver_FiresOnRetryAndLongPoll(t *testing.T) {
 	}
 	if got := len(obs2.longPolls); got < 2 {
 		t.Errorf("expected long-poll observations, got %d", got)
+	}
+}
+
+// TestObserver_FiresOnAutoRelogin guards that the 401 auto-relogin path emits a
+// RetryKindUnauthorized observation. Before the fix this retry class was the
+// only one the do() loop took silently — metrics/tracing missed every
+// transparent re-login.
+func TestObserver_FiresOnAutoRelogin(t *testing.T) {
+	t.Parallel()
+	obs := &recordingObserver{}
+	var selfCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/self", func(w http.ResponseWriter, _ *http.Request) {
+		if selfCalls.Add(1) == 1 {
+			w.WriteHeader(401)
+			_, _ = w.Write([]byte(`{"detail":"session expired"}`))
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "users_self.json"))
+	})
+	mux.HandleFunc("/authentication", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(201)
+		_, _ = w.Write(loadFixture(t, "auth_login_201_normal.json"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	cl, err := brainapi.NewClient(brainapi.Options{
+		BaseURL:  srv.URL,
+		Timeout:  5 * time.Second,
+		Observer: obs,
+		Email:    "me@example.com",
+		Password: "hunter2",
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := cl.Self(context.Background()); err != nil {
+		t.Fatalf("Self should succeed after auto-relogin: %v", err)
+	}
+
+	var reloginObserved bool
+	for _, r := range obs.retries {
+		if r.kind == brainapi.RetryKindUnauthorized {
+			reloginObserved = true
+		}
+	}
+	if !reloginObserved {
+		t.Errorf("expected a RetryKindUnauthorized observation, got %+v", obs.retries)
 	}
 }
 
