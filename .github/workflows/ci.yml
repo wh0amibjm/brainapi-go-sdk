@@ -24,7 +24,10 @@ jobs:
           cache: true
 
       - name: install gofumpt
-        run: go install mvdan.cc/gofumpt@latest
+        # Pinned (not @latest) so an upstream gofumpt release can't flip a green
+        # PR red with no code change. Keep aligned with the gofumpt bundled in
+        # the golangci-lint version below.
+        run: go install mvdan.cc/gofumpt@v0.10.0
 
       - name: gofumpt -extra check
         run: |
@@ -49,6 +52,11 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
+      - name: govulncheck
+        # Scan the (TLS/HTTP/credential-handling) dependency tree for known CVEs.
+        # Pinned for reproducible CI; reachability analysis keeps false positives low.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
   test:
     name: test
     runs-on: ${{ matrix.os }}
@@ -66,11 +74,14 @@ jobs:
       - name: go test -race
         run: go test -race -count=1 -timeout 5m ./...
 
-      - name: upload coverage (ubuntu only)
+      - name: coverage floor (ubuntu only)
         if: matrix.os == 'ubuntu-latest'
         run: |
           go test -race -coverprofile=coverage.out ./pkg/...
-          go tool cover -func=coverage.out | tail -1
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,"",$3); print $3}')
+          echo "total pkg coverage: ${total}%"
+          MIN=78
+          awk -v t="$total" -v m="$MIN" 'BEGIN { if (t+0 < m+0) { printf "::error::coverage %.1f%% is below floor %d%%\n", t, m; exit 1 } }'
 
   build:
     name: cross-compile
