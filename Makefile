@@ -15,7 +15,7 @@ LDFLAGS := -s -w \
 GOFLAGS := -trimpath
 
 .PHONY: all build build-mcp build-linux build-linux-arm64 build-windows build-darwin build-darwin-arm64 \
-        release release-mcp test test-short cover lint fmt vet tidy clean help install-hooks \
+        release release-mcp test test-short cover lint fmt vet tidy vuln clean help install-hooks \
         install-skill test-live-smoke
 
 all: lint test build build-mcp ## Run lint, test, and build both binaries
@@ -72,6 +72,9 @@ vet: ## go vet
 
 tidy: ## go mod tidy
 	go mod tidy
+
+vuln: ## Scan the dependency graph for known CVEs (govulncheck)
+	go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
 clean: ## Remove build artifacts (cross-platform via Go stdlib)
 	@go run ./internal/tools/clean
