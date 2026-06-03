@@ -296,9 +296,16 @@ func retryIn(sleep time.Duration) attemptDecision {
 
 // retryState carries the loop-local state the per-attempt evaluator reads and
 // updates across attempts.
+//
+// errAttempt counts only real error-class retries (network / 403 / 429 / 5xx)
+// and is what the maxRetries budget gates on. It is deliberately SEPARATE from
+// longPollSeen: a long-poll tick (longPoll200Empty / longPoll503) must not burn
+// the error-retry budget, otherwise a transient blip partway through a
+// multi-minute poll would no longer be retried.
 type retryState struct {
 	relogged     bool
 	longPollSeen int
+	errAttempt   int
 }
 
 // preflight applies the local short-circuit gates that refuse a request before
@@ -339,7 +346,10 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 	headers := buildHeaders(r, len(bodyBytes) > 0)
 	var st retryState
 
-	for attempt := 0; ; attempt++ {
+	// Termination is guaranteed by evaluate: error classes are capped by
+	// st.errAttempt (<= maxRetries), long-polls by st.longPollSeen, the
+	// relogin is one-shot (st.relogged), and 2xx/4xx are terminal.
+	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -362,7 +372,7 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 		}
 		c.observer.ObserveRequest(r.method, r.path, status, dur, err)
 
-		dec := c.evaluate(ctx, r, urlStr, resp, err, attempt, &st)
+		dec := c.evaluate(ctx, r, urlStr, resp, err, &st)
 		if !dec.retry {
 			return dec.resp, dec.err
 		}
@@ -372,22 +382,24 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 	}
 }
 
-// evaluate classifies a single attempt's transport result (resp, err) for the
-// given attempt number into an attemptDecision. It owns the response policy —
-// success, long-poll, auto-relogin, ban detection, rate-limit, server/client
-// errors — and updates the cross-attempt counters in st; the caller (do) owns
-// the loop and the sleep. Returns terminal(...) to stop, retryIn(d) to retry.
+// evaluate classifies a single attempt's transport result (resp, err) into an
+// attemptDecision. It owns the response policy — success, long-poll,
+// auto-relogin, ban detection, rate-limit, server/client errors — and updates
+// the cross-attempt counters in st; the caller (do) owns the loop and the
+// sleep. Returns terminal(...) to stop, retryIn(d) to retry. Error-class
+// retries are budgeted by st.errAttempt (independent of long-poll ticks).
 //
 //nolint:gocritic // the status policy is intentionally one flat switch
-func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp *rawResponse, err error, attempt int, st *retryState) attemptDecision {
+func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp *rawResponse, err error, st *retryState) attemptDecision {
 	if err != nil {
-		if attempt >= c.maxRetries {
+		if st.errAttempt >= c.maxRetries {
 			return terminal(nil, err)
 		}
 		c.logger.Warn("transport error, retrying",
-			"method", r.method, "url", urlStr, "attempt", attempt+1, "err", err.Error())
-		sleep := clamp(time.Duration(attempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)
-		c.observer.ObserveRetry(r.method, r.path, 0, attempt, RetryKindNetwork, sleep)
+			"method", r.method, "url", urlStr, "attempt", st.errAttempt+1, "err", err.Error())
+		sleep := clamp(time.Duration(st.errAttempt+1)*networkErrFloor, networkErrFloor, networkErrCeiling)
+		c.observer.ObserveRetry(r.method, r.path, 0, st.errAttempt, RetryKindNetwork, sleep)
+		st.errAttempt++
 		return retryIn(sleep)
 	}
 
@@ -439,6 +451,7 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 			return terminal(resp, err)
 		}
 		st.relogged = true
+		c.observer.ObserveRetry(r.method, r.path, 401, st.errAttempt, RetryKindUnauthorized, 0)
 		return retryIn(0)
 
 	case resp.status == 403:
@@ -458,10 +471,11 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 			c.banReason.Store(&reason)
 			return terminal(resp, &BannedError{Streak: int(streak), Reason: reason})
 		}
-		if attempt >= c.maxRetries {
+		if st.errAttempt >= c.maxRetries {
 			return terminal(resp, nil)
 		}
-		c.observer.ObserveRetry(r.method, r.path, 403, attempt, RetryKindForbidden, serverErrFloor)
+		c.observer.ObserveRetry(r.method, r.path, 403, st.errAttempt, RetryKindForbidden, serverErrFloor)
+		st.errAttempt++
 		return retryIn(serverErrFloor)
 
 	case resp.status == 429:
@@ -470,14 +484,15 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 		d = clamp(d, rateLimitFloor, rateLimitCeiling)
 		if cd {
 			c.setCooldown(d)
-			c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindCooldown, d)
+			c.observer.ObserveRetry(r.method, r.path, 429, st.errAttempt, RetryKindCooldown, d)
 		}
-		if attempt >= c.maxRetries {
+		if st.errAttempt >= c.maxRetries {
 			return terminal(resp, &RateLimitError{Status: 429, RetryAfter: d, Cooldown: cd, URL: urlStr, Body: resp.body})
 		}
 		c.logger.Warn("rate-limited, sleeping",
-			"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", attempt+1)
-		c.observer.ObserveRetry(r.method, r.path, 429, attempt, RetryKindRateLimit, d)
+			"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", st.errAttempt+1)
+		c.observer.ObserveRetry(r.method, r.path, 429, st.errAttempt, RetryKindRateLimit, d)
+		st.errAttempt++
 		return retryIn(d)
 
 	case resp.status == 503 && r.hints.longPoll503:
@@ -491,13 +506,14 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 		return retryIn(d)
 
 	case resp.status >= 500:
-		if attempt >= c.maxRetries {
+		if st.errAttempt >= c.maxRetries {
 			return terminal(resp, &APIError{Status: resp.status, Method: r.method, URL: urlStr, Body: resp.body})
 		}
-		d := clamp(time.Duration(attempt+1)*serverErrFloor, serverErrFloor, serverErrCeiling)
+		d := clamp(time.Duration(st.errAttempt+1)*serverErrFloor, serverErrFloor, serverErrCeiling)
 		c.logger.Warn("server error, retrying",
-			"status", resp.status, "url", urlStr, "attempt", attempt+1, "sleep", d.String())
-		c.observer.ObserveRetry(r.method, r.path, resp.status, attempt, RetryKindServer, d)
+			"status", resp.status, "url", urlStr, "attempt", st.errAttempt+1, "sleep", d.String())
+		c.observer.ObserveRetry(r.method, r.path, resp.status, st.errAttempt, RetryKindServer, d)
+		st.errAttempt++
 		return retryIn(d)
 
 	case resp.status == 405:

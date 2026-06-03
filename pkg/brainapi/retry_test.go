@@ -40,6 +40,42 @@ func TestRetryAfter_FloatString(t *testing.T) {
 	}
 }
 
+// TestLongPoll_DoesNotConsumeErrorBudget guards the fix that decoupled the
+// error-retry budget (st.errAttempt) from the long-poll counter
+// (st.longPollSeen). Before the fix the shared `attempt` counter meant that
+// once an endpoint had long-polled past MaxRetries, the very next transient
+// error was surfaced as terminal instead of retried. Here MaxRetries=1: one
+// long-poll tick precedes a transient 429; the 429 MUST still be retried and
+// CheckAlpha must ultimately succeed on the terminal body.
+func TestLongPoll_DoesNotConsumeErrorBudget(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		switch calls.Add(1) {
+		case 1:
+			// long-poll tick: 200 + empty body + Retry-After (does NOT count
+			// against the error budget).
+			w.Header().Set("Retry-After", "0.01")
+			w.WriteHeader(200)
+		case 2:
+			// transient, non-cooldown rate-limit mid-poll: must be retried even
+			// though a long-poll tick already happened.
+			w.Header().Set("Retry-After", "0.01")
+			w.WriteHeader(429)
+			_, _ = w.Write([]byte(`{"detail":"slow down"}`))
+		default:
+			w.WriteHeader(200)
+			_, _ = w.Write(loadFixture(t, "check_alpha_terminal.json"))
+		}
+	})
+	if _, err := cl.CheckAlpha(context.Background(), "abc"); err != nil {
+		t.Fatalf("CheckAlpha should retry the mid-poll 429 and succeed, got: %v", err)
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 calls (long-poll, retried 429, terminal), got %d", calls.Load())
+	}
+}
+
 func TestBanThreshold_HitsAfterStreak(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
