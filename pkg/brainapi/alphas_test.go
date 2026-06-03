@@ -133,6 +133,37 @@ func TestSubmitAlpha_Verified(t *testing.T) {
 	}
 }
 
+// BRAIN signals "submission still processing" with a 303 See Other back to the
+// submit URL. Redirect-following is disabled (WithNotFollowRedirects) precisely
+// so this surfaces as a keep-polling tick rather than an attempted http://:443
+// follow. This exercises both the parseSubmitVerdict 3xx branch and evaluate's
+// accept503+3xx branch end to end; the err==nil + verified assertions guard
+// against a regression that re-enabled redirect-following or reclassified the
+// 303 as terminal-failure.
+func TestSubmitAlpha_303KeepsPolling(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		// POST submit and the first GET poll both 303 "still processing".
+		if n < 3 {
+			w.Header().Set("Retry-After", "0.01")
+			w.Header().Set("Location", r.URL.String()) // decorative; must NOT be followed
+			w.WriteHeader(http.StatusSeeOther)         // 303
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "submit_200_verified.json"))
+	})
+	v, err := cl.SubmitAlpha(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("a 303 must keep polling, never surface as an error: %v", err)
+	}
+	if v.Status != "verified" {
+		t.Errorf("expected verified after 303 keep-polling, got %s (reason=%s)", v.Status, v.Reason)
+	}
+}
+
 // A 2xx whose SELF_CORRELATION check is not yet attached (the deterministic
 // gates land in the body before corr is computed) must NOT be reported verified
 // — corr is the whole point of the submit long-poll. Keep polling → pending_corr.
