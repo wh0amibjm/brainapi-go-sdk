@@ -240,15 +240,26 @@ function spawnCapture(
     const outChunks: Buffer[] = [];
     const errChunks: Buffer[] = [];
     let timer: NodeJS.Timeout | null = null;
+    let killTimer: NodeJS.Timeout | null = null;
     let timedOut = false;
+    const clearTimers = () => {
+      if (timer) clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+    };
     child.stdout.on('data', (c: Buffer) => outChunks.push(c));
     child.stderr.on('data', (c: Buffer) => errChunks.push(c));
+    // EPIPE/ECONNRESET when the child exits or closes stdin before draining the
+    // body (e.g. a large corr-local/createSimulation payload + early exit) is
+    // benign: the child's exit code + 'close' event carry the real outcome,
+    // which parseEnvelope surfaces. Without this handler the unhandled stream
+    // 'error' would crash the host process.
+    child.stdin.on('error', () => {});
     child.on('error', (e) => {
-      if (timer) clearTimeout(timer);
+      clearTimers();
       reject(new TransportError(`spawn ${binary}: ${e.message}`, -1));
     });
     child.on('close', (code, signal) => {
-      if (timer) clearTimeout(timer);
+      clearTimers();
       const stdout = Buffer.concat(outChunks).toString('utf8');
       const stderr = Buffer.concat(errChunks).toString('utf8');
       if (timedOut) {
@@ -271,8 +282,11 @@ function spawnCapture(
       timer = setTimeout(() => {
         timedOut = true;
         child.kill('SIGTERM');
-        // Hard-kill after 2s grace
-        setTimeout(() => child.kill('SIGKILL'), 2000);
+        // Hard-kill after 2s grace. Track + unref the grace timer so a
+        // well-behaved child that exits on SIGTERM doesn't keep the event loop
+        // alive (and the 'close' handler clears it).
+        killTimer = setTimeout(() => child.kill('SIGKILL'), 2000);
+        killTimer.unref();
       }, opts.timeoutMs);
     }
   });
