@@ -155,6 +155,50 @@ func TestCLI_ErrorExitCode(t *testing.T) {
 	}
 }
 
+// TestCLI_FeedbackUsageExitCode: a present-but-empty --title is a caller-side
+// usage error, so it must exit 2 (USAGE) with no JSON on stdout — not the
+// server-side exit 6 the `error`/api bucket reserves.
+func TestCLI_FeedbackUsageExitCode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping CLI integration test in short mode")
+	}
+	bin := buildBinary(t)
+	stdout, _, code := runCLI(t, bin, nil, "feedback", "--title", "", "--body", "x")
+	if code != exitUsage {
+		t.Errorf("expected exit %d, got %d (stdout=%q)", exitUsage, code, stdout)
+	}
+	if stdout != "" {
+		t.Errorf("usage error must not emit a JSON envelope on stdout, got %q", stdout)
+	}
+}
+
+// TestCLI_FeedbackDraftEnvelope: without --confirm the command never hits the
+// network (dry-run), so it deterministically returns a draft envelope — and that
+// envelope omits `number` (it's present only on a filed result).
+func TestCLI_FeedbackDraftEnvelope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping CLI integration test in short mode")
+	}
+	bin := buildBinary(t)
+	stdout, _, code := runCLI(t, bin, nil, "feedback", "--title", "t", "--body", "b")
+	if code != 0 {
+		t.Fatalf("exit=%d, stdout=%s", code, stdout)
+	}
+	var env struct {
+		OK   bool           `json:"ok"`
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		t.Fatalf("parse: %v\n%s", err, stdout)
+	}
+	if !env.OK || env.Data["mode"] != "draft_url" {
+		t.Errorf("expected a draft envelope, got %+v", env)
+	}
+	if _, ok := env.Data["number"]; ok {
+		t.Errorf("draft envelope must not carry a `number` key, got %+v", env.Data)
+	}
+}
+
 func TestCLI_VersionAlwaysOK(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping CLI integration test in short mode")

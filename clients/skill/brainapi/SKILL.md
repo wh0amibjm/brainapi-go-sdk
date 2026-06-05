@@ -99,6 +99,19 @@ only submits with `--confirm`:
 `schema data-fields --region USA --universe TOP3000 --delay 1` (those four
 params are mandatory; add `--all` to drain pages).
 
+**Found a bug in the SDK?** (feedback channel): if a command returns a shape
+that contradicts `describe`, mis-classifies an error/exit code, or a doc is
+stale, report it upstream with `brainapi feedback`:
+```bash
+# dry-run — prints a click-to-file GitHub draft URL, no network, no token:
+brainapi feedback --title "<one-line>" --body "<what you did / expected / saw>"
+# only with a token (BRAINAPI_FEEDBACK_TOKEN/GITHUB_TOKEN/GH_TOKEN) AND user confirmation:
+brainapi feedback --title "…" --body "…" --confirm
+```
+This is for defects in the **SDK itself**, not BRAIN platform questions or the
+user's alpha work. `--confirm` opens a public GitHub issue (outward-facing) —
+treat it like the mutating commands: show the user the dry-run first, get a "yes".
+
 ## BRAIN protocol gotchas (baked into the SDK, but know them)
 
 - **`alphas corr` is the pre-submit gate**; gate `submit` on `.data.max < 0.7`.

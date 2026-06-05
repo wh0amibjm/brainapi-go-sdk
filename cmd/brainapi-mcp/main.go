@@ -27,6 +27,7 @@ import (
 	"github.com/wh0amibjm/brainapi-go-sdk/internal/version"
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/captcha/altcha"
+	"github.com/wh0amibjm/brainapi-go-sdk/pkg/feedback"
 )
 
 func main() {
@@ -81,6 +82,7 @@ func main() {
 func newServer(cl *brainapi.Client, enableWrites bool) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "brainapi", Version: version.Version}, nil)
 	registerReadTools(s, cl)
+	registerFeedbackTool(s)
 	if enableWrites {
 		registerWriteTools(s, cl)
 	}
@@ -223,6 +225,46 @@ func registerReadTools(s *mcp.Server, cl *brainapi.Client) {
 			b, err := cl.FetchCaptchaChallenge(ctx)
 			return string(b), err
 		})
+}
+
+// ─── feedback tool (always registered) ────────────────────────────────────────
+
+type reportIssueArg struct {
+	Title    string `json:"title" jsonschema:"one-line summary of the SDK problem"`
+	Body     string `json:"body" jsonschema:"details: what you did, what you expected, and what actually happened (markdown ok)"`
+	Category string `json:"category,omitempty" jsonschema:"triage bucket: bug | docs | enhancement | question (default bug)"`
+	// Optional (unlike submit_alpha's confirm): the safe default is harmless —
+	// omitting it yields a draft URL, never a post.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"set true to actually open the GitHub issue (needs a token configured); omit/false returns a click-to-file draft URL"`
+}
+
+// registerFeedbackTool wires the agent feedback channel. It is registered
+// unconditionally (independent of --enable-writes) so an agent on the
+// default read-only surface can still report SDK defects. Filing opens an
+// issue on a public tracker, so — like submit_alpha — it is gated: it only
+// POSTs when a token is configured AND confirm=true; otherwise it returns a
+// prefilled draft URL for a human to open.
+func registerFeedbackTool(s *mcp.Server) {
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "report_issue",
+		Description: "Report a defect in the brainapi SDK itself — a wrong response shape, a " +
+			"mis-classified error, a stale/incorrect doc, or a tool that errors unexpectedly. " +
+			"This is for the SDK, NOT for BRAIN platform issues or the user's alpha/strategy work. " +
+			"Without confirm=true (or without a GitHub token configured) it returns a click-to-file " +
+			"draft URL; with both it opens the issue via the GitHub API.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in reportIssueArg) (*mcp.CallToolResult, *feedback.Result, error) {
+		res, err := feedback.File(
+			ctx,
+			feedback.Report{Title: in.Title, Body: in.Body, Category: in.Category, Surface: "mcp"},
+			feedback.RuntimeEnv(version.Version, version.Commit),
+			feedback.ConfigFromEnv(),
+			in.Confirm,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, &res, nil
+	})
 }
 
 // ─── mutating tools (only with --enable-writes) ───────────────────────────────
