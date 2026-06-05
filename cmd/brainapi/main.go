@@ -6,10 +6,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -140,81 +138,32 @@ func ctxWithSignal() (context.Context, context.CancelFunc) {
 }
 
 // writeErr maps a Go error into the stable {ok:false, error:{kind,message,details}}
-// JSON envelope on stdout, plus the right exit code on stderr.
-//
-//nolint:gocyclo // straight dispatch table; splitting helpers would obscure the mapping
+// JSON envelope on stdout, plus the right exit code on stderr. The kind and
+// details come from brainapi.Classify (shared with the brainapi-mcp server, so
+// both consumption modes classify identically); the exit code is looked up from
+// the same staticErrorKinds table that `describe` publishes, so the CLI's exit
+// codes cannot drift from the documented spec.
 func writeErr(err error) {
-	var kind string
-	var details any
-	code := exitAPI
-
-	var apiErr *brainapi.APIError
-	var rlErr *brainapi.RateLimitError
-	var banErr *brainapi.BannedError
-	var drfErr *brainapi.DRFError
-	var nvErr *brainapi.NotVerifiedError
-	var personaErr *brainapi.PersonaInquiryError
-	var netErr net.Error
-
-	switch {
-	case errors.As(err, &apiErr):
-		kind = "api"
-		details = map[string]any{
-			"status": apiErr.Status, "method": apiErr.Method,
-			"url": apiErr.URL, "body": tryJSON(apiErr.Body),
-		}
-		code = exitAPI
-	case errors.As(err, &rlErr):
-		kind = "rate_limit"
-		details = map[string]any{
-			"status": rlErr.Status, "retry_after_ms": rlErr.RetryAfter.Milliseconds(),
-			"cooldown": rlErr.Cooldown, "body": tryJSON(rlErr.Body),
-		}
-		code = exitRateLimit
-	case errors.As(err, &banErr):
-		kind = "banned"
-		details = map[string]any{"streak": banErr.Streak, "reason": banErr.Reason}
-		code = exitBanned
-	case errors.As(err, &drfErr):
-		kind = "drf_validation"
-		details = map[string]any{"status": drfErr.Status, "url": drfErr.URL, "fields": drfErr.Fields}
-		code = exitDRF
-	case errors.As(err, &nvErr):
-		kind = "not_verified"
-		details = map[string]any{"status": nvErr.Status, "body": tryJSON(nvErr.Body)}
-		code = exitBanned
-	case errors.As(err, &personaErr):
-		kind = "persona_inquiry"
-		details = map[string]any{"inquiry": personaErr.Inquiry}
-		code = exitPersonaInquiry
-	case errors.Is(err, brainapi.ErrDailyBudgetExhausted):
-		kind = "budget"
-		code = exitBudget
-	case errors.Is(err, brainapi.ErrNotAuthenticated):
-		kind = "not_authenticated"
-	case errors.Is(err, brainapi.ErrCooldown):
-		kind = "cooldown"
-		code = exitRateLimit
-	case errors.Is(err, brainapi.ErrLongPollExceeded):
-		kind = "long_poll_exceeded"
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		kind = "context"
-		code = exitNetwork
-	case errors.Is(err, brainapi.ErrInvalidArgument):
-		// Caller-supplied bad input (empty id, missing creds, …) — a usage error,
-		// not a server-side API failure. Must not share exit 6 with `api`/`error`.
-		kind = "invalid_argument"
-		code = exitUsage
-	case errors.As(err, &netErr):
-		// Transport-layer failure (connection refused, TLS, DNS, proxy, read) —
-		// distinct from a server-side API error, so it gets the NETWORK exit code.
-		kind = "network"
-		code = exitNetwork
-	default:
-		kind = "error"
+	kind, details := brainapi.Classify(err)
+	// A nil map boxed in `any` would serialize as "details":null; keep the
+	// envelope's omitempty behavior by passing an untyped nil for detail-less kinds.
+	var d any
+	if details != nil {
+		d = details
 	}
-	_ = jsonout.Failure(kind, err.Error(), details)
-	os.Exit(code)
+	_ = jsonout.Failure(kind, err.Error(), d)
+	os.Exit(exitCodeForKind(kind))
+}
+
+// exitCodeForKind returns the process exit code for an error kind, sourced from
+// the describe table. Unknown kinds fall back to the generic API exit code.
+func exitCodeForKind(kind string) int {
+	for _, k := range staticErrorKinds {
+		if k.Kind == kind {
+			return k.ExitCode
+		}
+	}
+	return exitAPI
 }
 
 func writeOK(data any) {
@@ -222,38 +171,6 @@ func writeOK(data any) {
 		fmt.Fprintln(os.Stderr, "brainapi: write output:", err)
 		os.Exit(exitNetwork)
 	}
-}
-
-// tryJSON returns body parsed as any, falling back to the string form for
-// non-JSON bodies. Keeps the error envelope readable when BRAIN returns a
-// JSON body.
-func tryJSON(b []byte) any {
-	trimmed := strings.TrimSpace(string(b))
-	if trimmed == "" {
-		return ""
-	}
-	if trimmed[0] == '{' || trimmed[0] == '[' {
-		return rawMessageFromBytes(b)
-	}
-	return trimmed
-}
-
-// rawMessageFromBytes wraps a []byte so the JSON encoder emits it verbatim.
-type rawJSON []byte
-
-// MarshalJSON satisfies json.Marshaler. Error return is always nil but the
-// signature is mandated by the interface.
-func (r rawJSON) MarshalJSON() ([]byte, error) { //nolint:unparam // interface contract
-	if len(r) == 0 {
-		return []byte("null"), nil
-	}
-	return []byte(r), nil
-}
-
-func rawMessageFromBytes(b []byte) rawJSON {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
 }
 
 func firstNonEmpty(s ...string) string {
