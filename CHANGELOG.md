@@ -23,6 +23,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   token, no network). A GitHub-side failure degrades to a draft URL rather than
   dropping the report. Target repo defaults to the SDK upstream; override with
   `BRAINAPI_FEEDBACK_REPO=owner/repo`. Documented in `docs/sdk-protocol.md`.
+- **Agent-friendly MCP & Skill consumption.** MCP tools now return failures as a
+  structured `{kind, message, details}` JSON payload (an `isError` result) so an
+  agent can branch on the stable `kind` instead of parsing the message, and the
+  server advertises operating instructions (auth, error-handling, safety) at
+  `initialize`. The `simulations_create` / `register` tools take typed request
+  bodies with a real input schema instead of an opaque JSON string. A new public
+  `brainapi.Classify` is the single source of truth for the error taxonomy,
+  shared by the CLI envelope and the MCP server. Added a canonical `AGENTS.md`
+  entry doc and a "which integration should I use?" guide (MCP / Skill / CLI /
+  library) to the README.
+
+### Changed
+- **`not_authenticated` is now consistent across every endpoint.** A 401 with no
+  configured credentials surfaces `ErrNotAuthenticated` (`kind:
+  not_authenticated`, exit 6) on any call, not just `auth probe` — so a
+  first-time, not-logged-in caller gets the same "set `BRAINAPI_USER` /
+  `BRAINAPI_PASS`" signal regardless of which command or MCP tool it runs first.
+  (Previously a non-probe call returned a generic `api` 401.) Explicit `Login`
+  with bad credentials still returns the `api` 401 as before.
 
 ## [0.5.1] - 2026-06-03
 

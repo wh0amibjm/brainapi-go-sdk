@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,6 +103,40 @@ func TestEnableWrites(t *testing.T) {
 	}
 	if got, want := len(names), len(readTools)+len(writeTools); got != want {
 		t.Errorf("--enable-writes tool count = %d, want %d", got, want)
+	}
+}
+
+// TestServerInstructions: the server advertises operating instructions at
+// initialize (auth, error handling, safety) so an agent gets the contract
+// before calling any tool — independent of which tool it calls first.
+func TestServerInstructions(t *testing.T) {
+	cl, err := brainapi.NewClient(brainapi.Options{})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientT, serverT := mcp.NewInMemoryTransports()
+	ss, err := newServer(cl, false).Connect(ctx, serverT, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	defer ss.Close()
+
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
+		Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer cs.Close()
+
+	instr := cs.InitializeResult().Instructions
+	for _, want := range []string{"not_authenticated", "BRAINAPI_USER", "confirm=true"} {
+		if !strings.Contains(instr, want) {
+			t.Errorf("server instructions missing %q", want)
+		}
 	}
 }
 

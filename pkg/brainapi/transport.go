@@ -445,7 +445,12 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 		}
 		email, pass := c.credentials()
 		if email == "" || pass == "" {
-			return terminal(resp, &APIError{Status: 401, Method: r.method, URL: urlStr, Body: resp.body})
+			// No cached credentials to log in with — this is "not logged in /
+			// not configured", not a server-side API failure. Surface the stable
+			// ErrNotAuthenticated (kind: not_authenticated) so every caller — the
+			// CLI envelope and each MCP tool — gets the same signal regardless of
+			// which endpoint was hit first. (Probe already maps its own 401 here.)
+			return terminal(resp, ErrNotAuthenticated)
 		}
 		if _, err := c.Login(ctx, email, pass); err != nil {
 			return terminal(resp, err)

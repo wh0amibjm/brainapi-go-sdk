@@ -58,4 +58,8 @@ This repo is built to be consumed by agents. Pick a mode (full table in the
   (`max < 0.7`) first. The MCP `submit_alpha` enforces this and also requires
   `confirm=true`.
 - Credentials come from the `BRAINAPI_USER` / `BRAINAPI_PASS` environment
-  variables — never hardcode them or commit them.
+  variables — never hardcode or commit them. The session is established
+  automatically on first use (auto-login on the first 401). If a call returns
+  `kind=not_authenticated`, none are configured: tell the user to set them — in
+  the MCP server's `env` block, then restart the MCP client; or `export` them for
+  the CLI — you can't supply them yourself.
