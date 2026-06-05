@@ -261,7 +261,7 @@ func registerFeedbackTool(s *mcp.Server) {
 			in.Confirm,
 		)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, classifyErr(err)
 		}
 		return nil, &res, nil
 	})
@@ -280,10 +280,6 @@ type submitResult struct {
 	CorrMax   *float64          `json:"corr_max,omitempty"`
 	Note      string            `json:"note"`
 	Verdict   *brainapi.Verdict `json:"verdict,omitempty"`
-}
-
-type bodyArg struct {
-	Body string `json:"body" jsonschema:"the request as a JSON object string (see 'brainapi describe' / SDK docs for the shape)"`
 }
 
 type emailArg struct {
@@ -314,7 +310,7 @@ func registerWriteTools(s *mcp.Server, cl *brainapi.Client) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in submitArg) (*mcp.CallToolResult, *submitResult, error) {
 		block, err := cl.AlphaSelfCorrelation(ctx, in.ID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("corr gate failed: %w", err)
+			return nil, nil, classifyErr(fmt.Errorf("corr gate failed: %w", err))
 		}
 		var corrMax *float64
 		if block != nil {
@@ -334,28 +330,20 @@ func registerWriteTools(s *mcp.Server, cl *brainapi.Client) {
 		}
 		v, err := cl.SubmitAlpha(ctx, in.ID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("submit failed: %w", err)
+			return nil, nil, classifyErr(fmt.Errorf("submit failed: %w", err))
 		}
 		return nil, &submitResult{Submitted: true, CorrMax: corrMax, Note: "submitted", Verdict: v}, nil
 	})
 
-	addTool(s, "simulations_create", "POST /simulations — DESTRUCTIVE: consumes simulation quota. 'body' is a SimulationRequest JSON object (type/regular/super/settings/combo). Returns the simulation id; poll it with wait_simulation.",
-		func(ctx context.Context, in bodyArg) (locResult, error) {
-			var req brainapi.SimulationRequest
-			if err := json.Unmarshal([]byte(in.Body), &req); err != nil {
-				return locResult{}, fmt.Errorf("invalid body JSON: %w", err)
-			}
-			loc, err := cl.CreateSimulation(ctx, req)
+	addTool(s, "simulations_create", "POST /simulations — DESTRUCTIVE: consumes simulation quota. Provide a SimulationRequest: 'type' (REGULAR|SUPER|COMBO), the alpha expression in 'regular' (or 'super'), and 'settings' (instrumentType, region, universe, delay, decay, neutralization, truncation, …). Returns the simulation id; poll it with wait_simulation.",
+		func(ctx context.Context, in brainapi.SimulationRequest) (locResult, error) {
+			loc, err := cl.CreateSimulation(ctx, in)
 			return locResult{Location: loc}, err
 		})
 
-	addTool(s, "register", "POST /users — DESTRUCTIVE: creates an account (Altcha captcha auto-solved). 'body' is a RegisterInput JSON object (email/firstName/lastName/fullName/gender/address/education/auxiliary).",
-		func(ctx context.Context, in bodyArg) (*brainapi.User, error) {
-			var inp brainapi.RegisterInput
-			if err := json.Unmarshal([]byte(in.Body), &inp); err != nil {
-				return nil, fmt.Errorf("invalid body JSON: %w", err)
-			}
-			return cl.Register(ctx, inp)
+	addTool(s, "register", "POST /users — DESTRUCTIVE: creates an account. Provide a RegisterInput: email, firstName, lastName, fullName, gender, address{country,…}, education{university, major, degree (BACHELORS|MASTERS|ASSOCIATE), graduationYear}, auxiliary{agree, password, confirmation}. The Altcha captcha is auto-solved by the SDK — leave auxiliary.captcha empty.",
+		func(ctx context.Context, in brainapi.RegisterInput) (*brainapi.User, error) {
+			return cl.Register(ctx, in)
 		})
 
 	addTool(s, "login", "POST /authentication — establish a session using the configured BRAINAPI_USER/PASS.",
@@ -428,14 +416,49 @@ type toolOut[T any] struct {
 }
 
 // addTool registers a tool from a plain (ctx, In) -> (T, error) function. On
-// error the SDK sets CallToolResult.IsError and includes the error string in
-// the content, so the agent sees it and can self-correct.
+// error the result is classified into the SDK's stable error taxonomy via
+// classifyErr, so the agent receives a structured {kind,message,details} payload
+// (as IsError text content) and can branch on the kind — rate_limit → back off,
+// budget → stop, drf_validation → fix a field — instead of parsing English. This
+// is the same taxonomy the CLI exposes in its {ok:false,error:{kind,...}} envelope.
 func addTool[In, T any](s *mcp.Server, name, desc string, fn func(context.Context, In) (T, error)) {
 	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, toolOut[T], error) {
 			out, err := fn(ctx, in)
-			return nil, toolOut[T]{Data: out}, err
+			if err != nil {
+				return nil, toolOut[T]{}, classifyErr(err)
+			}
+			return nil, toolOut[T]{Data: out}, nil
 		})
+}
+
+// structuredErr carries the SDK's stable error kind and details alongside the
+// human message. The go-sdk renders a handler error through
+// CallToolResult.SetError, which uses Error(); encoding the payload as a JSON
+// string therefore delivers the structured classification to the agent via the
+// error's text content, mirroring the CLI's {kind,message,details} envelope.
+type structuredErr struct {
+	Kind    string         `json:"kind"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+func (e *structuredErr) Error() string {
+	b, err := json.Marshal(e)
+	if err != nil {
+		return e.Message
+	}
+	return string(b)
+}
+
+// classifyErr wraps an SDK error into a structuredErr using brainapi.Classify,
+// the error taxonomy shared with the CLI. Returns nil for a nil error.
+func classifyErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	kind, details := brainapi.Classify(err)
+	return &structuredErr{Kind: kind, Message: err.Error(), Details: details}
 }
 
 // drainChan collects a (items, errs) channel pair from the SDK's *All iterators

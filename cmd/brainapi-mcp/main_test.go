@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -99,5 +102,87 @@ func TestEnableWrites(t *testing.T) {
 	}
 	if got, want := len(names), len(readTools)+len(writeTools); got != want {
 		t.Errorf("--enable-writes tool count = %d, want %d", got, want)
+	}
+}
+
+// TestClassifyErr: SDK errors are wrapped into a structuredErr whose kind comes
+// from brainapi.Classify and whose Error() is machine-parseable JSON, so an
+// agent can branch on the kind rather than parsing English.
+func TestClassifyErr(t *testing.T) {
+	t.Parallel()
+
+	if classifyErr(nil) != nil {
+		t.Fatal("classifyErr(nil) should be nil")
+	}
+
+	wrapped := fmt.Errorf("submit failed: %w", &brainapi.RateLimitError{Status: 429, RetryAfter: 5 * time.Second})
+	var se *structuredErr
+	if !errors.As(classifyErr(wrapped), &se) {
+		t.Fatalf("classifyErr returned %T, want *structuredErr", classifyErr(wrapped))
+	}
+	if se.Kind != "rate_limit" {
+		t.Errorf("kind = %q, want rate_limit", se.Kind)
+	}
+	if se.Details["retry_after_ms"] != int64(5000) {
+		t.Errorf("details.retry_after_ms = %v, want 5000", se.Details["retry_after_ms"])
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(se.Error()), &got); err != nil {
+		t.Fatalf("Error() is not JSON-parseable: %v", err)
+	}
+	if got["kind"] != "rate_limit" {
+		t.Errorf("Error() JSON kind = %v, want rate_limit", got["kind"])
+	}
+}
+
+// TestToolErrorIsStructured drives a real tool call over the in-memory transport
+// against an unreachable base URL and asserts the failure reaches the agent as
+// an IsError result whose text content is a structured {kind,...} JSON payload.
+func TestToolErrorIsStructured(t *testing.T) {
+	// MaxRetries:1 keeps the connection-refused failure fast (one backoff) so the
+	// call resolves to a tool result well within the context deadline.
+	cl, err := brainapi.NewClient(brainapi.Options{BaseURL: "http://127.0.0.1:1", MaxRetries: 1, Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	clientT, serverT := mcp.NewInMemoryTransports()
+	ss, err := newServer(cl, false).Connect(ctx, serverT, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	defer ss.Close()
+
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
+		Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer cs.Close()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "operators"})
+	if err != nil {
+		t.Fatalf("CallTool transport error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected IsError for an unreachable base URL")
+	}
+	if len(res.Content) == 0 {
+		t.Fatal("expected error content")
+	}
+	tc, ok := res.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want *mcp.TextContent", res.Content[0])
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(tc.Text), &got); err != nil {
+		t.Fatalf("error content is not structured JSON: %v (text=%q)", err, tc.Text)
+	}
+	if k, _ := got["kind"].(string); k == "" {
+		t.Errorf("structured error missing kind: %v", got)
 	}
 }
