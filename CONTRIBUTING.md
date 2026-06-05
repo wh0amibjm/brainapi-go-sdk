@@ -9,10 +9,21 @@ git clone https://github.com/wh0amibjm/brainapi-go-sdk.git
 cd brainapi-go-sdk
 go mod download
 
-# Install hooks (uses .pre-commit-config.yaml if pre-commit is installed,
-# falls back to .githooks/pre-commit otherwise)
+# Install hooks. Requires the pre-commit framework — the .githooks/ wrapper
+# delegates to it (install: pip install pre-commit, or uvx pre-commit).
 make install-hooks
 ```
+
+### Prerequisites
+
+- **Go 1.26.1+** (`go version`) — building, testing.
+- **gofumpt** — formatting (`go install mvdan.cc/gofumpt@latest`).
+- **golangci-lint v2.x** — linting (see https://golangci-lint.run/welcome/install/).
+- **pre-commit** (Python) — the commit-hook runner (`pip install pre-commit`).
+
+`make build` / `make build-mcp` need only Go; `make all` / `make lint` / `make fmt`
+and the commit hooks need the tools above. `make vuln` self-bootstraps
+`govulncheck` via `go run`, so it needs nothing extra.
 
 ## The protocol contract is upstream
 
@@ -29,16 +40,18 @@ spec is the source of truth, not assumptions.
 
 ## Pre-commit gate
 
-Every commit must pass:
+Every commit must pass (defined in `.pre-commit-config.yaml`):
 
 - `gofumpt -extra` (format)
 - `go vet ./...`
 - `golangci-lint run --timeout=3m`
 - `go mod tidy`
-- `go test -race -short ./...`
+- stock hygiene hooks (trailing-whitespace, end-of-file, check-yaml, …)
+- a Conventional-Commits subject check (commit-msg stage)
 
-These run automatically via `pre-commit install` (Python framework) or
-`make install-hooks` (POSIX shim).
+The full `-race` test suite is **not** a commit hook — it runs on `pre-push`
+and in CI. Hooks run via `pre-commit install` or `make install-hooks` (both
+delegate to the pre-commit framework).
 
 ## Testing
 
