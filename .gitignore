@@ -16,9 +16,9 @@ cookies-*.json
 # Local test-account credentials — NEVER commit
 testdata/test-accounts/
 
-# AI tooling (locally generated)
+# AI tooling (locally generated). AGENTS.md is intentionally tracked — it is the
+# canonical cross-tool agent entry doc.
 .serena/
-AGENTS.md
 .claude/
 
 # Defense-in-depth: catch sensitive material that doesn't fit any of the
