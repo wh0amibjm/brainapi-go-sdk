@@ -80,7 +80,10 @@ func main() {
 // from main so tests can assert the read/write tool gating without spawning a
 // subprocess (connect a client over an in-memory transport and list tools).
 func newServer(cl *brainapi.Client, enableWrites bool) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "brainapi", Version: version.Version}, nil)
+	s := mcp.NewServer(
+		&mcp.Implementation{Name: "brainapi", Version: version.Version},
+		&mcp.ServerOptions{Instructions: serverInstructions},
+	)
 	registerReadTools(s, cl)
 	registerFeedbackTool(s)
 	if enableWrites {
@@ -88,6 +91,28 @@ func newServer(cl *brainapi.Client, enableWrites bool) *mcp.Server {
 	}
 	return s
 }
+
+// serverInstructions is returned to the MCP client at initialize, so an agent
+// has the operating contract — auth, error handling, safety — before it calls
+// any tool, independent of which tool it happens to call first.
+const serverInstructions = `brainapi exposes the WorldQuant BRAIN API.
+
+Auth: credentials come from the BRAINAPI_USER / BRAINAPI_PASS environment
+variables (set them in this server's "env" config block). The session is
+established automatically on first use. If any tool returns an error with
+kind="not_authenticated", no credentials are configured — tell the user to set
+BRAINAPI_USER and BRAINAPI_PASS in the MCP server's env block and restart the
+MCP client; you cannot supply them yourself.
+
+Errors: every tool returns a failure as a JSON {kind, message, details} payload
+(an isError result). Branch on kind, not the message: rate_limit -> back off,
+budget -> stop, banned/not_verified -> stop and report, drf_validation -> fix the
+named field, not_authenticated -> see above.
+
+Safety: read tools are safe to call freely. submit_alpha / register / login /
+password_* mutate scarce or near-irreversible state — confirm with the user
+first and never loop them. submit_alpha also runs the self-correlation gate
+(max < 0.7) and requires confirm=true.`
 
 // ─── argument schemas ─────────────────────────────────────────────────────────
 
@@ -136,7 +161,7 @@ type performanceArg struct {
 // ─── read-only tools (always registered) ──────────────────────────────────────
 
 func registerReadTools(s *mcp.Server, cl *brainapi.Client) {
-	addTool(s, "probe", "GET /authentication: probe the live session (auto-login on 401); returns user id + permissions.",
+	addTool(s, "probe", "GET /authentication: probe the live session (auto-login on 401); returns user id + permissions. Returns kind=not_authenticated when no credentials are configured — the canonical way to check whether the user is logged in.",
 		func(ctx context.Context, _ noArgs) (*brainapi.SessionInfo, error) { return cl.Probe(ctx) })
 
 	addTool(s, "whoami", "GET /users/self: full profile of the authenticated user.",
