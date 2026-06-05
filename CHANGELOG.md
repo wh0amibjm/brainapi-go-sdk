@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Agent feedback channel.** When an agent driving the SDK hits a defect in the
+  SDK itself — a `data` shape that diverges from `describe`, a mis-classified
+  `error.kind` / exit code, a stale doc, or a tool that errors unexpectedly — it
+  can now report it upstream instead of losing the finding. Two symmetric
+  surfaces over one shared `pkg/feedback`: a new `brainapi feedback` CLI
+  subcommand and an always-on `report_issue` MCP tool (registered independent of
+  `--enable-writes`). Both render the report plus an auto-collected environment
+  block (SDK version/commit, surface, OS/arch, Go version) into a GitHub issue.
+  Filing is outward-facing, so — like `submit_alpha` — it is gated: it only
+  `POST`s when a token is configured (`BRAINAPI_FEEDBACK_TOKEN`, else
+  `GITHUB_TOKEN` / `GH_TOKEN`) **and** the caller confirms (`--confirm` /
+  `confirm:true`); otherwise it returns a prefilled click-to-file draft URL (no
+  token, no network). A GitHub-side failure degrades to a draft URL rather than
+  dropping the report. Target repo defaults to the SDK upstream; override with
+  `BRAINAPI_FEEDBACK_REPO=owner/repo`. Documented in `docs/sdk-protocol.md`.
+
 ## [0.5.1] - 2026-06-03
 
 ### Security

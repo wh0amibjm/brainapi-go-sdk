@@ -10,13 +10,15 @@ import (
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
 )
 
-// readTools must always be registered, regardless of --enable-writes.
+// readTools must always be registered, regardless of --enable-writes. This
+// also covers report_issue: not a BRAIN GET, but the always-on agent feedback
+// channel, gated by its own confirm flag rather than by --enable-writes.
 var readTools = []string{
 	"probe", "whoami", "competitions", "operators", "get_alpha", "check_alpha",
 	"check_alpha_decoded", "self_correlation", "alpha_pnl", "performance",
 	"activities", "list_alphas", "list_alphas_all", "messages", "messages_all",
 	"data_fields", "data_fields_all", "get_simulation", "wait_simulation",
-	"captcha_challenge",
+	"captcha_challenge", "report_issue",
 }
 
 // writeTools are mutating/scarce operations gated behind --enable-writes.

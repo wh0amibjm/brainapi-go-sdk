@@ -352,3 +352,62 @@ above, with a typed exception hierarchy and one method per endpoint.
 
 If you write a wrapper in another language and it makes sense to upstream it,
 add a row to this section pointing at your reference impl.
+
+---
+
+## Feedback channel
+
+If, while driving the SDK, you hit a defect **in the SDK itself** — a `data`
+shape that diverges from `describe`, a mis-classified `error.kind` / exit code, a
+stale entry in this doc, or a command/tool that errors unexpectedly — there is a
+first-class way to report it upstream instead of losing the finding. This is for
+the SDK, **not** for BRAIN platform questions or your own alpha/strategy work.
+
+Two symmetric surfaces, one shared mechanism:
+
+| Surface | Entry point |
+|---|---|
+| CLI | `brainapi feedback --title <one-line> --body <details> [--category bug\|docs\|enhancement\|question] [--confirm]` |
+| MCP | the `report_issue` tool (always registered, independent of `--enable-writes`) |
+
+Both render the report (plus an auto-collected environment block — SDK version,
+commit, surface, OS/arch, Go version) into a GitHub issue and return the standard
+envelope:
+
+```json
+{ "ok": true, "data": {
+  "filed":  false,
+  "mode":   "draft_url",
+  "url":    "https://github.com/<repo>/issues/new?title=…&body=…",
+  "note":   "no GitHub token configured; returning a draft issue URL for a human to open"
+} }
+```
+
+`number` is omitted on a draft and present only on a filed (`github_api`) result.
+
+**Two modes, picked automatically:**
+
+- `github_api` — a token is configured **and** the caller confirmed
+  (`--confirm` / `confirm:true`): the issue is filed via
+  `POST /repos/{owner}/{repo}/issues`; `filed:true`, `url` is the new issue, and
+  `number` is its id.
+- `draft_url` — otherwise: a prefilled "new issue" URL is returned for a human to
+  open. No token, no network — the safe default.
+
+**Gating & degradation:**
+
+- Filing opens an issue on a public tracker, so it is **outward-facing** and never
+  happens implicitly — treat `--confirm` like a mutating command (show the
+  dry-run, get a "yes"). The CLI requires `--confirm`; the MCP tool's `confirm`
+  defaults to `false` (a draft is harmless).
+- If the GitHub call itself fails, both surfaces **degrade to a draft URL** (with
+  the cause in `note`) rather than erroring — the channel always yields *some* way
+  to land the feedback. Success is therefore always exit `0`; a missing **or
+  empty** `--title` / `--body` trips the usual `no_output` / exit 2 path.
+
+**Configuration (env):**
+
+| Var | Purpose |
+|---|---|
+| `BRAINAPI_FEEDBACK_TOKEN`, else `GITHUB_TOKEN`, else `GH_TOKEN` | token used to file via the API; absent ⇒ draft-only |
+| `BRAINAPI_FEEDBACK_REPO` (`owner/repo`) | override the target repo (defaults to the SDK upstream) — set this when working from a fork |

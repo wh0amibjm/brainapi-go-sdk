@@ -95,6 +95,7 @@ func newRootCmd() *cobra.Command {
 		newRegisterCmd(),
 		newEmailCmd(),
 		newPasswordCmd(),
+		newFeedbackCmd(),
 		newDescribeCmd(),
 		newVersionCmd(),
 	)
