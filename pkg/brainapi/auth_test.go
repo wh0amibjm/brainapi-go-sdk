@@ -141,6 +141,26 @@ func TestAutoRelogin_On401(t *testing.T) {
 	}
 }
 
+// With no cached credentials, a 401 on any endpoint must surface the stable
+// ErrNotAuthenticated (kind: not_authenticated) rather than a generic APIError,
+// so a first-time, not-logged-in caller gets a consistent "configure creds"
+// signal no matter which endpoint it hits first.
+func TestNoCredentials_401IsNotAuthenticated(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(401)
+		_, _ = w.Write(loadFixture(t, "auth_401_no_creds.json"))
+	})
+	// Client has no Email/Password configured (newTestServerAndClient default).
+	_, err := cl.GetAlpha(context.Background(), "qMPjAxnO")
+	if !errors.Is(err, brainapi.ErrNotAuthenticated) {
+		t.Fatalf("expected ErrNotAuthenticated, got %T %v", err, err)
+	}
+	if kind, _ := brainapi.Classify(err); kind != "not_authenticated" {
+		t.Errorf("Classify kind = %q, want not_authenticated", kind)
+	}
+}
+
 // A request that stays 401 even AFTER a successful re-login must surface an
 // error, not be masked as an empty-body success (which a caller would then
 // mis-parse into a zero-value struct).
