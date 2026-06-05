@@ -1,9 +1,12 @@
 package brainapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 )
 
@@ -144,6 +147,82 @@ func AsDRFError(err error) (*DRFError, bool) {
 		return e, true
 	}
 	return nil, false
+}
+
+// Classify maps any error produced by this package into a stable, machine-
+// matchable kind string and a structured details map. It is the single source
+// of truth for the SDK's error taxonomy: the CLI renders it as its
+// {ok:false,error:{kind,...}} envelope and the brainapi-mcp server returns it
+// as a structured tool error, so the two consumption modes classify identically.
+//
+// Branch on the returned kind, never on the human-readable message — DRF
+// validation messages are locale-dependent. The kinds are: api, rate_limit,
+// banned, not_verified, drf_validation, persona_inquiry, budget,
+// not_authenticated, cooldown, long_poll_exceeded, context, invalid_argument,
+// network, error. A nil error yields ("", nil).
+func Classify(err error) (kind string, details map[string]any) {
+	if err == nil {
+		return "", nil
+	}
+	var (
+		apiErr     *APIError
+		rlErr      *RateLimitError
+		banErr     *BannedError
+		drfErr     *DRFError
+		nvErr      *NotVerifiedError
+		personaErr *PersonaInquiryError
+		netErr     net.Error
+	)
+	switch {
+	case errors.As(err, &apiErr):
+		return "api", map[string]any{
+			"status": apiErr.Status, "method": apiErr.Method,
+			"url": apiErr.URL, "body": jsonOrString(apiErr.Body),
+		}
+	case errors.As(err, &rlErr):
+		return "rate_limit", map[string]any{
+			"status": rlErr.Status, "retry_after_ms": rlErr.RetryAfter.Milliseconds(),
+			"cooldown": rlErr.Cooldown, "body": jsonOrString(rlErr.Body),
+		}
+	case errors.As(err, &banErr):
+		return "banned", map[string]any{"streak": banErr.Streak, "reason": banErr.Reason}
+	case errors.As(err, &drfErr):
+		return "drf_validation", map[string]any{"status": drfErr.Status, "url": drfErr.URL, "fields": drfErr.Fields}
+	case errors.As(err, &nvErr):
+		return "not_verified", map[string]any{"status": nvErr.Status, "body": jsonOrString(nvErr.Body)}
+	case errors.As(err, &personaErr):
+		return "persona_inquiry", map[string]any{"inquiry": personaErr.Inquiry}
+	case errors.Is(err, ErrDailyBudgetExhausted):
+		return "budget", nil
+	case errors.Is(err, ErrNotAuthenticated):
+		return "not_authenticated", nil
+	case errors.Is(err, ErrCooldown):
+		return "cooldown", nil
+	case errors.Is(err, ErrLongPollExceeded):
+		return "long_poll_exceeded", nil
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "context", nil
+	case errors.Is(err, ErrInvalidArgument):
+		return "invalid_argument", nil
+	case errors.As(err, &netErr):
+		return "network", nil
+	default:
+		return "error", nil
+	}
+}
+
+// jsonOrString returns b parsed as raw JSON when it looks like a JSON object or
+// array, the trimmed string for any other non-empty body, and "" for an empty
+// body — keeping error details readable whether or not BRAIN returned JSON.
+func jsonOrString(b []byte) any {
+	trimmed := strings.TrimSpace(string(b))
+	if trimmed == "" {
+		return ""
+	}
+	if trimmed[0] == '{' || trimmed[0] == '[' {
+		return json.RawMessage(b)
+	}
+	return trimmed
 }
 
 // decodeBody unmarshals a response body into a fresh T, wrapping any parse

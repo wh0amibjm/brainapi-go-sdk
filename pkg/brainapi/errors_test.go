@@ -1,13 +1,92 @@
 package brainapi_test
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
 )
+
+// fakeNetErr is a minimal net.Error so Classify's transport branch is reachable
+// without opening a real socket.
+type fakeNetErr struct{}
+
+func (fakeNetErr) Error() string   { return "dial tcp: refused" }
+func (fakeNetErr) Timeout() bool   { return false }
+func (fakeNetErr) Temporary() bool { return false }
+
+// TestClassify locks the SDK error taxonomy shared by the CLI envelope and the
+// brainapi-mcp structured errors: each typed/sentinel error must map to its
+// stable kind, and the mapping must survive error wrapping (errors.As/Is).
+func TestClassify(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"api", &brainapi.APIError{Status: 500, Method: "GET", URL: "/x", Body: []byte("boom")}, "api"},
+		{"rate_limit", &brainapi.RateLimitError{Status: 429, RetryAfter: 5 * time.Second}, "rate_limit"},
+		{"banned", &brainapi.BannedError{Streak: 3}, "banned"},
+		{"not_verified", &brainapi.NotVerifiedError{Email: "x@y.com", Status: 403}, "not_verified"},
+		{"drf_validation", &brainapi.DRFError{Status: 400, Fields: map[string][]string{"email": {"required"}}}, "drf_validation"},
+		{"persona_inquiry", &brainapi.PersonaInquiryError{Inquiry: "inq_abc"}, "persona_inquiry"},
+		{"budget", brainapi.ErrDailyBudgetExhausted, "budget"},
+		{"not_authenticated", brainapi.ErrNotAuthenticated, "not_authenticated"},
+		{"cooldown", brainapi.ErrCooldown, "cooldown"},
+		{"long_poll_exceeded", brainapi.ErrLongPollExceeded, "long_poll_exceeded"},
+		{"context", context.Canceled, "context"},
+		{"invalid_argument", brainapi.ErrInvalidArgument, "invalid_argument"},
+		{"network", fakeNetErr{}, "network"},
+		{"wrapped-api", fmt.Errorf("submit failed: %w", &brainapi.APIError{Status: 500}), "api"},
+		{"plain", errors.New("something else"), "error"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, _ := brainapi.Classify(tc.err)
+			if got != tc.want {
+				t.Errorf("Classify kind = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	if kind, details := brainapi.Classify(nil); kind != "" || details != nil {
+		t.Errorf("Classify(nil) = (%q, %v), want (\"\", nil)", kind, details)
+	}
+}
+
+// TestClassifyDetails verifies the structured details that agents and shell
+// callers branch on are populated for the kinds that carry them.
+func TestClassifyDetails(t *testing.T) {
+	t.Parallel()
+
+	_, d := brainapi.Classify(&brainapi.RateLimitError{Status: 429, RetryAfter: 5 * time.Second, Cooldown: true})
+	if d["retry_after_ms"] != int64(5000) || d["cooldown"] != true || d["status"] != 429 {
+		t.Errorf("rate_limit details = %v", d)
+	}
+
+	_, d = brainapi.Classify(&brainapi.DRFError{Status: 400, Fields: map[string][]string{"email": {"required"}}})
+	fields, ok := d["fields"].(map[string][]string)
+	if !ok || len(fields["email"]) != 1 {
+		t.Errorf("drf_validation details.fields = %v", d["fields"])
+	}
+
+	// A JSON body is surfaced verbatim as raw JSON; a non-JSON body as a string.
+	_, d = brainapi.Classify(&brainapi.APIError{Status: 400, Body: []byte(`{"detail":"THROTTLED"}`)})
+	if _, ok := d["body"].(json.RawMessage); !ok {
+		t.Errorf("api details.body for JSON body = %T, want json.RawMessage", d["body"])
+	}
+	_, d = brainapi.Classify(&brainapi.APIError{Status: 400, Body: []byte("plain text")})
+	if d["body"] != "plain text" {
+		t.Errorf("api details.body for non-JSON body = %v, want \"plain text\"", d["body"])
+	}
+}
 
 // TestErrorStrings exercises every typed error's Error() method. They're
 // trivial format strings but lint rules expect them to be reachable from

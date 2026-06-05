@@ -56,12 +56,16 @@ exception on `error`. The exception hierarchy maps exit codes 1:1:
 | 10 | `PersonaInquiryError` | Login inquiry envelope |
 
 Methods: `probe` `login` `logout` `self` `competitions` `activities`
-`getAlpha` `checkAlpha` `submitAlpha` `alphaPnl` `listAlphas`
+`getAlpha` `checkAlpha` `submitAlpha` `alphaPnl` `alphaPerformance`
+`alphaCorr` `alphaCorrLocal` `listAlphas` `listMessages`
 `createSimulation` `getSimulation` `waitSimulation` `backtest`
 `operators` `dataFields` `register` `emailReverify` `emailVerify`
 `passwordForgot` `passwordReset` `describe` `version` — plus a
 typed `run<T>(args, stdin?)` escape hatch for any command the wrapper
 hasn't yet exposed.
+
+`alphaCorr` / `alphaCorrLocal` are the self-correlation gate behind
+`submitAlpha` (submittable when `max < 0.7`).
 
 ## Schema gotchas
 

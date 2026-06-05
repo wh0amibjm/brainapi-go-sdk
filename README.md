@@ -11,6 +11,11 @@ A typed Go SDK + cross-platform CLI for the [WorldQuant BRAIN](https://platform.
 
 ## Install
 
+**Prerequisites:** a [WorldQuant BRAIN](https://platform.worldquantbrain.com)
+account (the `register` command can create one) for anything behind login, and —
+to build from source — Go 1.26.1+ (check with `go version`). Neither is needed if
+you grab a pre-built binary (below).
+
 ```bash
 # Library
 go get github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi
@@ -91,6 +96,10 @@ func main() {
 }
 ```
 
+Runnable examples live in [`examples/`](examples) — e.g. `go run ./examples/list_active`,
+plus the corr-then-submit gate (`corr_then_submit`) and account registration
+(`register_one`, which creates a real account). Set `BRAINAPI_USER` / `BRAINAPI_PASS` first.
+
 ## Integrating from another language
 
 If you're calling `brainapi` as a subprocess from Node / Python / shell rather
@@ -101,7 +110,7 @@ conventions, and the non-obvious schema traps (`activities.current` is
 month-to-date not today; BRAIN day rolls at 3 AM ET; etc.).
 
 The bundled TypeScript client under [`clients/typescript/`](clients/typescript) is
-the reference wrapper — see its envelope parser, typed-exception hierarchy, and execa plumbing.
+the reference wrapper — see its envelope parser, typed-exception hierarchy, and dependency-free subprocess (`child_process.spawn`) plumbing.
 
 ## MCP server
 
@@ -137,13 +146,47 @@ stderr, so stdout stays pure JSON-RPC:
 
 **Read-only by default.** The server registers **20 read-only (GET) tools**
 (`probe`, `whoami`, `operators`, `get_alpha`, `check_alpha`, `self_correlation`,
-`alpha_pnl`, `list_alphas`, `data_fields`, `get_simulation`, … ). The **10 mutating
-tools** (`submit_alpha`, `simulations_create`, `register`, `login`, `logout`,
-`email_verify`, `email_reverify`, `password_forgot`, `password_reset`,
-`persona_complete`) are registered **only when you pass `--enable-writes`** in
-`args`. `submit_alpha` is doubly gated even then: it runs the self-correlation gate
-(`max < 0.7`) first and requires `confirm=true`, otherwise it returns a dry-run and
-spends no daily slot.
+`alpha_pnl`, `list_alphas`, `data_fields`, `get_simulation`, … ) plus
+`report_issue` — an always-on agent feedback channel for reporting defects in the
+SDK itself (independent of `--enable-writes`; gated by `confirm=true`, and without
+a token it just returns a click-to-file draft URL) — so the default surface is
+**21 tools**. The **10 mutating tools** (`submit_alpha`, `simulations_create`,
+`register`, `login`, `logout`, `email_verify`, `email_reverify`,
+`password_forgot`, `password_reset`, `persona_complete`) are registered **only
+when you pass `--enable-writes`** in `args` (31 tools total). `submit_alpha` is
+doubly gated even then: it runs the self-correlation gate (`max < 0.7`) first and
+requires `confirm=true`, otherwise it returns a dry-run and spends no daily slot.
+
+On error, every tool returns an `isError` result whose content is a structured
+`{kind, message, details}` JSON payload — the same stable error taxonomy the CLI
+exposes (`rate_limit`, `budget`, `banned`, `drf_validation`, …) — so an agent can
+branch on `kind` instead of parsing the message. Write tools that take a request
+body (`simulations_create`, `register`) accept it as a typed object with a real
+input schema, not an opaque JSON string.
+
+## Agent Skill
+
+For [Claude Code](https://docs.claude.com/claude-code) and other Claude-family
+agents, an installable **Agent Skill** wraps the CLI with judgment and safety
+rails (discovery-first via `describe`, exit-code branching, and a
+correlation-gated `safe-submit` helper). One-command install:
+
+```bash
+make install-skill          # installs into ~/.claude/skills
+# or, standalone:           bash clients/skill/install.sh
+```
+
+See [`clients/skill/`](clients/skill) for the SKILL.md and what it adds on top of
+the raw CLI.
+
+## Which integration should I use?
+
+| You are… | Use | What it adds | Needs |
+|---|---|---|---|
+| an MCP-capable agent / host (Claude Desktop, Cursor, …) | the **MCP server** ([`cmd/brainapi-mcp`](cmd/brainapi-mcp)) | typed tools, read-only by default, structured errors — no shell | the `brainapi-mcp` binary |
+| building on Claude Code specifically | the **Agent Skill** ([`clients/skill`](clients/skill)) | the CLI surface + judgment / safety rails | the `brainapi` binary, `jq`, a shell |
+| scripting from Node / Python / shell | the **CLI as a subprocess** (see [`docs/sdk-protocol.md`](docs/sdk-protocol.md)) | stable JSON envelope + exit codes, any language | the `brainapi` binary |
+| embedding in a Go program | the **library** ([`pkg/brainapi`](pkg/brainapi)) | typed methods, full control | Go 1.26.1+ |
 
 ## Endpoint coverage
 
@@ -190,6 +233,7 @@ Generic error-envelope examples: [DRF 400](testdata/drf_validation_400.json) for
 | `--cookie-jar` | _(none)_ | `${UserCacheDir}/brainapi/cookies-<email>.json` | File-backed jar with atomic save |
 | `--timeout` | _(none)_ | `15s` | Per-request HTTP timeout |
 | `--log-level` | _(none)_ | `warn` | `error\|warn\|info\|debug` — log on stderr, JSON on stdout |
+| `--output` | _(none)_ | `json` | Output format (only `json` is currently supported) |
 
 ## Exit codes (CLI)
 
@@ -235,18 +279,36 @@ make install-hooks  # git pre-commit via .githooks/
 pre-commit run --all-files   # equivalent, using the pre-commit framework
 ```
 
-Single-source-tree, no CGO, no platform-specific build tags — the same `./cmd/brainapi` package compiles cleanly for every target.
+`make build` / `make build-mcp` need only the Go toolchain. `make all`, `make
+lint`, `make fmt`, and the commit hooks additionally require these dev tools:
+
+```bash
+go install mvdan.cc/gofumpt@latest                                   # formatter
+# golangci-lint v2.x — see https://golangci-lint.run/welcome/install/
+pip install pre-commit   # or: uvx pre-commit                        # hook runner
+```
+
+`make vuln` needs nothing extra — it runs `govulncheck` via `go run`.
+Single-source-tree, no CGO, no platform-specific build tags — the same
+`./cmd/brainapi` package compiles cleanly for every target.
 
 ## Engineering standards
 
-- **Lint**: `golangci-lint` with 15 enabled linters including `errorlint`, `bodyclose`, `gocritic`, `gofumpt`.
-- **Pre-commit hooks**: `gofumpt`, `go vet`, `golangci-lint`, `go mod tidy`, `go test -race -short` — all run before every commit.
+- **Lint**: a curated `golangci-lint` v2 config — `errorlint`, `bodyclose`, `gocritic`, `nilerr`, `unparam`, `misspell`, `unconvert` on top of the standard set (`errcheck`, `govet`, `staticcheck`, `ineffassign`, `unused`) — plus `gofumpt -extra` formatting.
+- **Pre-commit hooks**: `gofumpt`, `go vet`, `golangci-lint`, `go mod tidy`, plus a Conventional-Commits subject check — all run before every commit (the full `-race` test suite runs in CI and on `pre-push`).
 - **Test coverage**: every endpoint method has a unit test driven by `httptest.Server` replaying real BRAIN-captured payloads from `testdata/`. Retry-policy tests cover float-`Retry-After`, ban-after-streak, cooldown, DRF envelope decoding, long-poll cap.
 - **Integration tests**: gated by `BRAINAPI_INTEGRATION=1` env so CI doesn't accidentally hit production.
 
 ## Protocol truth
 
 The endpoint shapes encoded in `pkg/brainapi/types.go` mirror the Chrome-DevTools-verified response captures pinned under [`testdata/`](testdata) and documented in [`docs/protocol.md`](docs/protocol.md). When BRAIN's protocol changes, re-capture the live shape, update the fixture and protocol notes, then port the change into the typed structs.
+
+## Contributing
+
+Issues and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+protocol contract, the pre-commit gate, and test expectations;
+[`SECURITY.md`](SECURITY.md) for how to report a vulnerability; and
+[`CHANGELOG.md`](CHANGELOG.md) for release history.
 
 ## Disclaimer
 
