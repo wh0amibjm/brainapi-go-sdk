@@ -4,8 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 )
+
+// encodeFilters percent-encodes each BRAIN comparison filter (e.g.
+// "is.sharpe>=1.25") for transport. BRAIN parses the operator (>, >=, <, <=) off
+// the parameter NAME, so the whole "field+op+value" travels as one token with no
+// key/value "=" separator — url.QueryEscape encodes the operator chars while
+// leaving the field path, dots and digits intact (e.g. "is.sharpe%3E%3D1.25").
+// Empty fragments are dropped. Verified against the live endpoint 2026-06-07;
+// the DRF "__gte" form returns HTTP 400 there, hence this raw-append path.
+func encodeFilters(filters []string) []string {
+	if len(filters) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(filters))
+	for _, f := range filters {
+		if f == "" {
+			continue
+		}
+		out = append(out, url.QueryEscape(f))
+	}
+	return out
+}
 
 // GetAlpha calls GET /alphas/{id}. Single round-trip, returns the full alpha
 // record. Note: is.selfCorrelation is only populated when status==ACTIVE; for
@@ -306,9 +328,10 @@ func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[
 		setIfNotEmpty("order", opts.Order).
 		values()
 	resp, err := c.do(ctx, doRequest{
-		method: "GET",
-		path:   "/users/self/alphas",
-		query:  qs,
+		method:   "GET",
+		path:     "/users/self/alphas",
+		query:    qs,
+		rawQuery: encodeFilters(opts.Filters),
 	})
 	if err != nil {
 		return nil, err
@@ -330,10 +353,11 @@ func (c *Client) ListAlphasAll(ctx context.Context, opts ListAlphasOptions) (<-c
 	}
 	return paginateAll(ctx, opts.Offset, func(offset int) ([]Alpha, bool, error) {
 		page, err := c.ListAlphas(ctx, ListAlphasOptions{
-			Status: opts.Status,
-			Limit:  limit,
-			Offset: offset,
-			Order:  opts.Order,
+			Status:  opts.Status,
+			Limit:   limit,
+			Offset:  offset,
+			Order:   opts.Order,
+			Filters: opts.Filters,
 		})
 		if err != nil {
 			return nil, false, err

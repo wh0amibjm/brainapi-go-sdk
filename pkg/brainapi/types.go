@@ -456,6 +456,12 @@ type ListAlphasOptions struct {
 	Limit  int    // default 100 per BRAIN
 	Offset int
 	Order  string // "-dateCreated" etc.
+	// Filters are BRAIN comparison filters in logical form, e.g.
+	// "is.sharpe>=1.25", "is.fitness>=1", "is.turnover<=0.7". The operator
+	// (>, >=, <, <=) is embedded in the field token; multiple filters AND together.
+	// Each is percent-encoded and appended raw (BRAIN rejects DRF "__gte" with 400).
+	// Verified against the live endpoint 2026-06-07.
+	Filters []string
 }
 
 // Message is one item of GET /users/self/messages results[] — the feed behind
