@@ -179,8 +179,12 @@ func (t *tlsHTTP) loadJar() error {
 	return nil
 }
 
-// saveJar dumps the current cookies for baseURL to t.jarPath. atomic-rename
-// so a partial-write doesn't corrupt the jar.
+// saveJar dumps the current cookies for baseURL to t.jarPath. Writes to a
+// per-write UNIQUE temp file then atomic-renames it into place, so neither a
+// partial write nor a CONCURRENT brainapi process sharing this jarPath can
+// corrupt the jar (the in-process path is already serialized by saveMu; the
+// unique temp name removes the remaining cross-process clobber on a fixed
+// "<jar>.tmp"). Last writer wins, harmless since all hold the same session.
 func (t *tlsHTTP) saveJar() error {
 	t.saveMu.Lock()
 	defer t.saveMu.Unlock()
@@ -214,11 +218,28 @@ func (t *tlsHTTP) saveJar() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp := t.jarPath + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	// CreateTemp picks a unique name (and 0o600 perms) in the jar's dir, so two
+	// processes saving at once never write the same temp before the rename.
+	f, err := os.CreateTemp(dir, filepath.Base(t.jarPath)+".tmp-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, t.jarPath)
+	tmp := f.Name()
+	_, werr := f.Write(b)
+	cerr := f.Close()
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return werr
+	}
+	if cerr != nil {
+		_ = os.Remove(tmp)
+		return cerr
+	}
+	if err := os.Rename(tmp, t.jarPath); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // clearJar wipes any cookies the in-memory jar holds for the configured base
@@ -260,16 +281,25 @@ func (t *tlsHTTP) clearJar() {
 // ---------------------------------------------------------------------------
 
 type doRequest struct {
-	method  string
-	path    string
-	query   url.Values
-	body    any    // serialized as JSON if non-nil
-	rawBody []byte // overrides body if set
-	headers []hdrPair
-	auth    *basicAuth // sets Authorization: Basic ...
-	bearer  string     // sets Authorization: Bearer ...
-	noJSON  bool       // true to omit "Accept: application/json" / "Content-Type"
-	hints   retryHints
+	method string
+	path   string
+	query  url.Values
+	// rawQuery holds PRE-ENCODED query fragments appended after the url.Values
+	// `query`. BRAIN's list filters embed the operator in the field token, e.g.
+	// `is.sharpe>=1.25`, which must travel as ONE token with no key/value "="
+	// separator. url.Values can't express that — it always emits `key=value`, so
+	// it would append a stray "=" and double-encode the operator. Callers
+	// percent-encode each fragment themselves (see ListAlphas → encodeFilters);
+	// do() appends them as-is without re-encoding, and url.Parse preserves
+	// RawQuery as written. The caller owns each fragment's correctness.
+	rawQuery []string
+	body     any    // serialized as JSON if non-nil
+	rawBody  []byte // overrides body if set
+	headers  []hdrPair
+	auth     *basicAuth // sets Authorization: Basic ...
+	bearer   string     // sets Authorization: Bearer ...
+	noJSON   bool       // true to omit "Accept: application/json" / "Content-Type"
+	hints    retryHints
 }
 
 type basicAuth struct {
@@ -343,6 +373,17 @@ func (c *Client) do(ctx context.Context, r doRequest) (*rawResponse, error) {
 	}
 
 	urlStr := c.joinURL(r.path, r.query)
+	// Append pre-encoded raw query fragments after the url.Values query (see
+	// doRequest.rawQuery): BRAIN's comparison filters travel as a single encoded
+	// field+op+value token with no key/value "=" separator, which url.Values cannot
+	// express. Callers already percent-encoded them; we only join, never re-encode.
+	if len(r.rawQuery) > 0 {
+		sep := "&"
+		if !strings.Contains(urlStr, "?") {
+			sep = "?"
+		}
+		urlStr += sep + strings.Join(r.rawQuery, "&")
+	}
 	headers := buildHeaders(r, len(bodyBytes) > 0)
 	var st retryState
 

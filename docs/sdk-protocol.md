@@ -163,6 +163,22 @@ every page. Without it you get one page (default `limit=50` for alphas,
 `next === null` and returns the concatenated `results` (`count` reflects the
 total).
 
+### Value filters: `alphas list --filter`
+
+`alphas list` (and `ListAlphasOptions.Filters`) accepts BRAIN's comparison
+filters, where the operator is **embedded in the field token** —
+`is.sharpe>=1.25`, `is.fitness>=1`, `is.turnover<=0.7` (operators `>`, `>=`,
+`<`, `<=`). The flag is repeatable and multiple filters **AND** together; it
+combines with `--status` / `--order` / `--all`. The SDK percent-encodes each
+fragment and appends it raw to the query — `url.Values` can't express a token
+with no `key=value` separator. BRAIN rejects the Django `field__gte=` form with
+HTTP 400, so use the embedded-operator form. (Wire form + the 400 verified
+against the live endpoint 2026-06-07.)
+
+```bash
+brainapi alphas list --status UNSUBMITTED --filter 'is.fitness>=3' --all
+```
+
 ### Decoded vs raw records: `--decode`
 
 `users activities <kind>` returns `records.records` as an array of **positional

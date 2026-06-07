@@ -114,6 +114,19 @@ Callers that need typed access can `json.Unmarshal(field, &dst)` against whateve
 
 The SDK uses three different decoded types: `[]Operator`, `DataFieldsPage`, `Page[Alpha]`.
 
+### `/users/self/alphas` value filters embed the operator in the field
+
+Comparison filters are sent as `is.<field><op><value>` — the operator is part of
+the parameter token, NOT a Django `__gte`-style lookup: `is.sharpe>=1.25`,
+`is.fitness>=1`, `is.turnover<=0.7` (operators `>`, `>=`, `<`, `<=`). Multiple
+filters AND together and combine with `status` / `order` / `limit` / `offset`.
+The token carries no key/value `=` separator, so the SDK percent-encodes the
+whole fragment (`is.sharpe%3E%3D1.25`) and appends it raw rather than going
+through `url.Values` (which would force a `key=value` shape). The Django
+`is.sharpe__gte=1.25` form returns **HTTP 400 `["Invalid query"]`**. Surfaced in
+the SDK as `ListAlphasOptions.Filters` / `alphas list --filter`. (Wire form and
+the 400 verified against the live endpoint 2026-06-07.)
+
 ### DRF validation envelope on 400
 
 All `/users/*` and `/user/*` 400 responses use:

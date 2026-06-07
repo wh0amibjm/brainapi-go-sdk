@@ -215,6 +215,7 @@ func newAlphaListCmd() *cobra.Command {
 	var status, order string
 	var limit, offset int
 	var all bool
+	var filters []string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "GET /users/self/alphas: paginated alpha list",
@@ -229,7 +230,7 @@ func newAlphaListCmd() *cobra.Command {
 
 			if !all {
 				page, err := cl.ListAlphas(ctx, brainapi.ListAlphasOptions{
-					Status: status, Order: order, Limit: limit, Offset: offset,
+					Status: status, Order: order, Limit: limit, Offset: offset, Filters: filters,
 				})
 				if err != nil {
 					writeErr(err)
@@ -240,7 +241,7 @@ func newAlphaListCmd() *cobra.Command {
 			}
 
 			out, errs := cl.ListAlphasAll(ctx, brainapi.ListAlphasOptions{
-				Status: status, Order: order, Limit: limit, Offset: offset,
+				Status: status, Order: order, Limit: limit, Offset: offset, Filters: filters,
 			})
 			var alphas []brainapi.Alpha
 			for {
@@ -272,5 +273,8 @@ func newAlphaListCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 100, "Page size")
 	cmd.Flags().IntVar(&offset, "offset", 0, "Pagination offset")
 	cmd.Flags().BoolVar(&all, "all", false, "Drain all pages (default: first page only)")
+	cmd.Flags().StringArrayVar(&filters, "filter", nil,
+		"BRAIN comparison filter, repeatable (AND); operator embedded in the field, "+
+			"e.g. --filter 'is.sharpe>=1.25' --filter 'is.turnover<=0.7'")
 	return cmd
 }

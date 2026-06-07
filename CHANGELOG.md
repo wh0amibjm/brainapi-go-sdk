@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Value-comparison filters on `alphas list` / `ListAlphas`.** `GET
+  /users/self/alphas` accepts BRAIN's comparison filters, where the operator is
+  embedded in the field token — `is.sharpe>=1.25`, `is.fitness>=1`,
+  `is.turnover<=0.7` (operators `>`, `>=`, `<`, `<=`) — and multiple filters AND
+  together. Exposed as a repeatable `--filter` flag and `ListAlphasOptions.Filters`;
+  the SDK percent-encodes each fragment and appends it raw to the query
+  (`url.Values` can't express a token with no `key=value` separator). The Django
+  `field__gte=` form is rejected by BRAIN with HTTP 400, so the embedded-operator
+  form is the supported one. Verified against the live endpoint 2026-06-07.
 - **Agent feedback channel.** When an agent driving the SDK hits a defect in the
   SDK itself — a `data` shape that diverges from `describe`, a mis-classified
   `error.kind` / exit code, a stale doc, or a tool that errors unexpectedly — it
@@ -42,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BRAINAPI_PASS`" signal regardless of which command or MCP tool it runs first.
   (Previously a non-probe call returned a generic `api` 401.) Explicit `Login`
   with bad credentials still returns the `api` 401 as before.
+
+### Fixed
+- **Cookie-jar persistence is now safe across concurrent processes.** `saveJar`
+  wrote to a fixed `<jar>.tmp` before its atomic rename, so two `brainapi`
+  processes sharing one cookie-jar path could clobber that temp mid-write. It now
+  writes to a per-write unique temp via `os.CreateTemp` before renaming, so
+  concurrent writers can no longer corrupt the jar (the in-process path was
+  already serialized by a mutex; this closes the cross-process gap).
 
 ## [0.5.1] - 2026-06-03
 

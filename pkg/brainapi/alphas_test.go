@@ -3,6 +3,7 @@ package brainapi_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -367,5 +368,43 @@ func TestSubmit_BudgetGate(t *testing.T) {
 	_, err = cl.SubmitAlpha(context.Background(), "b")
 	if err == nil {
 		t.Fatal("expected ErrDailyBudgetExhausted on second call")
+	}
+}
+
+// ListAlphas threads BRAIN comparison filters onto the query VERBATIM (operator
+// embedded in the field token, percent-encoded), AND-combining multiple filters
+// alongside status/order. Verified against the live endpoint 2026-06-07: the
+// DRF "__gte" form 400s there, so the SDK must emit "is.sharpe%3E%3D1.25", not
+// "is.sharpe__gte=1.25". This pins the wire format so a refactor can't regress it.
+func TestListAlphas_Filters(t *testing.T) {
+	t.Parallel()
+	var rawQuery string
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/self/alphas" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		rawQuery = r.URL.RawQuery
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"count":0,"next":null,"previous":null,"results":[]}`))
+	})
+	_, err := cl.ListAlphas(context.Background(), brainapi.ListAlphasOptions{
+		Status:  "ACTIVE",
+		Filters: []string{"is.sharpe>=1.25", "is.turnover<=0.7", ""},
+	})
+	if err != nil {
+		t.Fatalf("ListAlphas: %v", err)
+	}
+	for _, want := range []string{
+		"status=ACTIVE",
+		"is.sharpe%3E%3D1.25",  // ">=" encoded, no key/value "=" separator
+		"is.turnover%3C%3D0.7", // "<=" encoded
+	} {
+		if !strings.Contains(rawQuery, want) {
+			t.Errorf("raw query %q missing %q", rawQuery, want)
+		}
+	}
+	// The empty filter element must be dropped (no stray "&&" / trailing "&").
+	if strings.Contains(rawQuery, "&&") {
+		t.Errorf("raw query has empty fragment: %q", rawQuery)
 	}
 }
