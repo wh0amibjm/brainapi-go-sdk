@@ -296,6 +296,9 @@ type DataField struct {
 	AlphaCount   int        `json:"alphaCount"`
 	UserCount    int        `json:"userCount"`
 	Themes       []NamedRef `json:"themes"`
+	// DateCreated is BRAIN's month-granularity "Date added" (e.g. "2026-03-01"),
+	// added to GET /data-fields on 2026-06-11. Empty for responses that predate it.
+	DateCreated string `json:"dateCreated"`
 }
 
 // NamedRef is the {id, name} shape used inside DataField.
