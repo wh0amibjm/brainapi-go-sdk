@@ -55,27 +55,10 @@ func newSchemaDataFieldsCmd() *cobra.Command {
 				writeOK(page)
 				return nil
 			}
-			out, errs := cl.DataFieldsAll(ctx, q)
-			var fields []brainapi.DataField
-			for {
-				select {
-				case f, ok := <-out:
-					if !ok {
-						out = nil
-					} else {
-						fields = append(fields, f)
-					}
-				case e, ok := <-errs:
-					if !ok {
-						errs = nil
-					} else if e != nil {
-						writeErr(e)
-						return nil
-					}
-				}
-				if out == nil && errs == nil {
-					break
-				}
+			fields, err := drainAll(cl.DataFieldsAll(ctx, q))
+			if err != nil {
+				writeErr(err)
+				return nil
 			}
 			writeOK(map[string]any{"count": len(fields), "results": fields})
 			return nil

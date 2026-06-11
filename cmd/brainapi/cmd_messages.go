@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
@@ -44,27 +42,10 @@ func newMessagesListCmd() *cobra.Command {
 				return nil
 			}
 
-			out, errs := cl.MessagesAll(ctx, opts)
-			var msgs []brainapi.Message
-			for {
-				select {
-				case m, ok := <-out:
-					if !ok {
-						out = nil
-					} else {
-						msgs = append(msgs, m)
-					}
-				case e, ok := <-errs:
-					if !ok {
-						errs = nil
-					} else if e != nil {
-						writeErr(fmt.Errorf("paginate: %w", e))
-						return nil
-					}
-				}
-				if out == nil && errs == nil {
-					break
-				}
+			msgs, err := drainAll(cl.MessagesAll(ctx, opts))
+			if err != nil {
+				writeErr(err)
+				return nil
 			}
 			writeOK(map[string]any{"count": len(msgs), "results": msgs})
 			return nil

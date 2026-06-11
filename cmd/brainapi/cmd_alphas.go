@@ -240,29 +240,12 @@ func newAlphaListCmd() *cobra.Command {
 				return nil
 			}
 
-			out, errs := cl.ListAlphasAll(ctx, brainapi.ListAlphasOptions{
+			alphas, err := drainAll(cl.ListAlphasAll(ctx, brainapi.ListAlphasOptions{
 				Status: status, Order: order, Limit: limit, Offset: offset, Filters: filters,
-			})
-			var alphas []brainapi.Alpha
-			for {
-				select {
-				case a, ok := <-out:
-					if !ok {
-						out = nil
-					} else {
-						alphas = append(alphas, a)
-					}
-				case e, ok := <-errs:
-					if !ok {
-						errs = nil
-					} else if e != nil {
-						writeErr(fmt.Errorf("paginate: %w", e))
-						return nil
-					}
-				}
-				if out == nil && errs == nil {
-					break
-				}
+			}))
+			if err != nil {
+				writeErr(err)
+				return nil
 			}
 			writeOK(map[string]any{"count": len(alphas), "results": alphas})
 			return nil
