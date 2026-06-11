@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // encodeFilters percent-encodes each BRAIN comparison filter (e.g.
@@ -201,7 +202,7 @@ func parseSubmitVerdict(resp *rawResponse) *Verdict {
 	if len(nonCorrFail) > 0 {
 		return &Verdict{
 			Status: "submit_failed",
-			Reason: "check_fail:" + joinStrings(nonCorrFail, ","),
+			Reason: "check_fail:" + strings.Join(nonCorrFail, ","),
 			Checks: body.Is.Checks,
 			HTTP:   resp.status,
 		}
@@ -239,17 +240,6 @@ func parseSubmitVerdict(resp *rawResponse) *Verdict {
 		Checks: body.Is.Checks,
 		HTTP:   resp.status,
 	}
-}
-
-func joinStrings(s []string, sep string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	out := s[0]
-	for _, x := range s[1:] {
-		out += sep + x
-	}
-	return out
 }
 
 // AlphaPnL calls GET /alphas/{id}/recordsets/pnl and long-polls until the
