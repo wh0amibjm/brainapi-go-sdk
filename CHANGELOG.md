@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-06-11
+
+### Changed
+- **Captcha solver: removed the per-iteration heap allocation in the
+  proof-of-work search.** The hot loop called `h.Sum(nil)` every iteration,
+  allocating a fresh 32-byte digest each time; it now reuses a stack-local
+  `[sha256.Size]byte` via `h.Sum(sum[:0])` and compares with `bytes.Equal`.
+  Allocations drop from ~50k per solve to a fixed constant (~1.6 MB → <1 KB per
+  op), trimming GC pressure and ~13–18% off the solve benchmarks. No behavior
+  change.
+- **Consolidated three duplicated CLI pagination drains** (`alphas list`,
+  `messages list`, `schema data-fields --all`) into a shared generic `drainAll`
+  helper. `schema data-fields` now wraps drain errors with the same `paginate:`
+  prefix the other two already used; the output protocol is unchanged (an empty
+  result still serializes as `"results": null`).
+- Replaced the hand-rolled `joinStrings` with the standard library's
+  `strings.Join` (identical behavior).
+- CI: bumped `softprops/action-gh-release` v2 → v3 for the Node 24 runtime.
+
 ## [0.6.0] - 2026-06-07
 
 ### Added
@@ -322,6 +341,7 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
+[0.6.1]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.4.0...v0.5.0
