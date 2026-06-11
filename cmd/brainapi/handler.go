@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -29,4 +30,19 @@ func runE[T any](fn func(*brainapi.Client, context.Context) (T, error)) func(*co
 		writeOK(res)
 		return nil
 	}
+}
+
+// drainAll collects an *All iterator's (items, errs) channel pair into a slice.
+// The producer closes both channels; errs is buffered and carries at most one
+// terminal error, surfaced here wrapped with "paginate:" context. The slice is
+// left nil when empty so the JSON envelope keeps emitting "results": null.
+func drainAll[T any](items <-chan T, errs <-chan error) ([]T, error) {
+	var out []T
+	for it := range items {
+		out = append(out, it)
+	}
+	if err := <-errs; err != nil {
+		return nil, fmt.Errorf("paginate: %w", err)
+	}
+	return out, nil
 }

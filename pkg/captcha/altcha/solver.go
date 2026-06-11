@@ -14,6 +14,7 @@
 package altcha
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -106,6 +107,7 @@ func Solve(ctx context.Context, ch Challenge, workers int) (*Solution, error) {
 		go func(start int64) {
 			defer wg.Done()
 			buf := make([]byte, 0, len(ch.Salt)+20)
+			var sum [sha256.Size]byte
 			h := sha256.New()
 			step := int64(workers)
 			for n := start; n <= ch.MaxNumber; n += step {
@@ -116,15 +118,7 @@ func Solve(ctx context.Context, ch Challenge, workers int) (*Solution, error) {
 				buf = strconv.AppendInt(buf, n, 10)
 				h.Reset()
 				h.Write(buf)
-				sum := h.Sum(nil)
-				equal := true
-				for i := 0; i < sha256.Size; i++ {
-					if sum[i] != target[i] {
-						equal = false
-						break
-					}
-				}
-				if equal {
+				if bytes.Equal(h.Sum(sum[:0]), target) {
 					// First-writer-wins; later finds get ignored.
 					if atomic.CompareAndSwapInt64(&found, -1, n) {
 						stop.Store(true)
