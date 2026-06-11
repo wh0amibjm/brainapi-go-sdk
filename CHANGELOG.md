@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-11
+
+### Added
+- **`DataField.DateCreated` — retain BRAIN's "Date added" field metadata.**
+  GET /data-fields rows now carry a month-granularity `dateCreated` key (e.g.
+  `"2026-03-01"`; platform announcement 2026-06-11). The struct previously
+  dropped it on decode; it is now retained and passes through the CLI's
+  `schema data-fields` JSON output unchanged. Decodes to `""` for responses
+  that predate the metadata.
+
 ## [0.6.1] - 2026-06-11
 
 ### Changed
