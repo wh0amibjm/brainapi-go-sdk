@@ -61,4 +61,7 @@ func TestDataFields_HappyPath(t *testing.T) {
 	if page.Results[0].ID != "abnormal_return_earnings_release" {
 		t.Errorf("first field wrong: %+v", page.Results[0])
 	}
+	if page.Results[0].DateCreated != "2026-03-01" {
+		t.Errorf("dateCreated not decoded: %+v", page.Results[0])
+	}
 }
