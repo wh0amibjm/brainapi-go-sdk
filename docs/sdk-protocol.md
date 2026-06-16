@@ -88,9 +88,9 @@ backwards-compatible; renumbering an existing one is a SemVer-major change.
 | 0    | OK             | `data` payload produced                                           | n/a                                                          |
 | 2    | USAGE          | Bad flag, missing required arg, cobra parse failure, bad caller input | `no_output` (stdout empty), `invalid_argument`          |
 | 3    | RATE_LIMIT     | 429 from BRAIN, or in-process cooldown active                     | `rate_limit`, `cooldown`                                     |
-| 4    | BANNED         | 403-streak gate tripped, or account not verified                  | `banned`, `not_verified`                                     |
+| 4    | BANNED         | Opaque-403-streak gate tripped, or account not verified           | `banned`, `not_verified`                                     |
 | 5    | DRF_VALIDATION | 400 from BRAIN with DRF field-error envelope                      | `drf_validation`                                             |
-| 6    | API            | Any other 4xx/5xx; also catch-all for non-categorised errors      | `api`, `error`, `not_authenticated`, `long_poll_exceeded`   |
+| 6    | API            | Any other 4xx/5xx; also catch-all for non-categorised errors      | `api`, `error`, `not_authenticated`, `permission_denied`, `long_poll_exceeded` |
 | 7    | BUDGET         | In-process daily-budget counter is full                           | `budget`                                                     |
 | 8    | NETWORK        | Transport failure (conn/TLS/DNS/proxy/read); context cancel / deadline | `context`, `network`                                    |
 | 10   | PERSONA        | Login returned an inquiry envelope (dead-code safety net)         | `persona_inquiry`                                            |
@@ -101,7 +101,8 @@ backwards-compatible; renumbering an existing one is a SemVer-major change.
 api                  4xx/5xx with body. details = {status, method, url, body}
 rate_limit           429. details = {status, retry_after_ms, cooldown, body}
                        body = BRAIN's 429 payload; {"detail":"THROTTLED"} ⇒ submission subsystem hung (not a routine cap)
-banned               403-streak. details = {streak, reason}
+banned               Opaque-403-streak (no DRF detail body). details = {streak, reason}
+permission_denied    403 with DRF {"detail":...} envelope — endpoint-scoped authz wall, NOT a ban; terminal, no retry. details = {status, detail, body}   [exit 6]
 not_verified         403 NOT_VERIFIED. details = {status, body}
 drf_validation       400 + DRF. details = {status, url, fields: {<field>: [<msg>, ...]}}
 invalid_argument     Bad caller input (empty id, missing creds, ...). details = nil   [exit 2]

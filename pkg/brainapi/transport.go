@@ -510,6 +510,17 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 		if bytes.Contains(resp.body, []byte("NOT_VERIFIED")) {
 			return terminal(resp, &NotVerifiedError{Status: resp.status, Body: resp.body})
 		}
+		// A 403 carrying the DRF permission/auth envelope ({"detail": "..."}) is
+		// a terminal authorization boundary for this endpoint, not an account
+		// ban. Retrying can never clear it, and counting it toward the ban streak
+		// would let one call to a permission-gated endpoint self-trip the ban
+		// flag on a healthy account — so reset the streak and surface a typed,
+		// non-retryable PermissionDeniedError. Only opaque 403s (no detail body —
+		// edge blocks, real bans) fall through to ban detection below.
+		if detail, ok := drfDetail(resp.body); ok {
+			c.consecutive403.Store(0)
+			return terminal(resp, &PermissionDeniedError{Status: resp.status, Detail: detail, Body: resp.body})
+		}
 		streak := c.consecutive403.Add(1)
 		if c.banThreshold > 0 && int(streak) >= c.banThreshold {
 			reason := shortBody(resp.body)

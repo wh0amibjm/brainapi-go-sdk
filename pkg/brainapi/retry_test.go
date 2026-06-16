@@ -76,13 +76,17 @@ func TestLongPoll_DoesNotConsumeErrorBudget(t *testing.T) {
 	}
 }
 
+// TestBanThreshold_HitsAfterStreak uses an OPAQUE 403 (no DRF "detail" envelope
+// — an edge block / real ban looks like this) so it still feeds ban detection.
+// A structured permission 403 ({"detail":...}) deliberately does NOT — see
+// TestPermissionDenied403_DoesNotBan.
 func TestBanThreshold_HitsAfterStreak(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
 	srv, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(403)
-		_, _ = w.Write([]byte(`{"detail":"forbidden"}`))
+		_, _ = w.Write([]byte("Forbidden"))
 	})
 	_ = srv
 
@@ -98,6 +102,39 @@ func TestBanThreshold_HitsAfterStreak(t *testing.T) {
 	}
 	if be.Streak < 3 {
 		t.Errorf("expected streak >= 3, got %d", be.Streak)
+	}
+}
+
+// TestPermissionDenied403_DoesNotBan locks the fix that a 403 carrying the DRF
+// permission envelope ({"detail": "..."}) is a terminal, non-retryable
+// PermissionDeniedError that does NOT feed the ban streak. Before the fix, a
+// single call to a permission-gated endpoint retried the same 403 three times
+// and self-tripped the ban flag, mislabelling a healthy account as banned.
+func TestPermissionDenied403_DoesNotBan(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(403)
+		_, _ = w.Write([]byte(`{"detail":"You do not have permission to perform this action."}`))
+	})
+
+	_, err := cl.Self(context.Background())
+	pd, ok := brainapi.AsPermissionDeniedError(err)
+	if !ok {
+		t.Fatalf("expected PermissionDeniedError, got %T %v", err, err)
+	}
+	if pd.Status != 403 || pd.Detail == "" {
+		t.Errorf("PermissionDeniedError = %+v, want status 403 + non-empty detail", pd)
+	}
+	// Terminal on the first response: no futile retries against a permission wall.
+	if n := calls.Load(); n != 1 {
+		t.Errorf("expected exactly 1 call (no retry), got %d", n)
+	}
+	// And it must never be classified as a ban.
+	var be *brainapi.BannedError
+	if errors.As(err, &be) {
+		t.Errorf("permission 403 must not surface as BannedError, got streak=%d", be.Streak)
 	}
 }
 
