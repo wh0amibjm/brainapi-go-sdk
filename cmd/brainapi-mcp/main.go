@@ -106,8 +106,10 @@ MCP client; you cannot supply them yourself.
 
 Errors: every tool returns a failure as a JSON {kind, message, details} payload
 (an isError result). Branch on kind, not the message: rate_limit -> back off,
-budget -> stop, banned/not_verified -> stop and report, drf_validation -> fix the
-named field, not_authenticated -> see above.
+budget -> stop, banned/not_verified -> stop and report, permission_denied -> this
+account lacks access to that endpoint (not a ban); stop calling it, other
+endpoints still work, drf_validation -> fix the named field, not_authenticated ->
+see above.
 
 Safety: read tools are safe to call freely. submit_alpha / register / login /
 password_* mutate scarce or near-irreversible state — confirm with the user

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-16
+
+### Fixed
+- **Permission-denied 403s no longer self-trip ban detection.** A 403 carrying
+  the Django REST framework permission/auth envelope (`{"detail": "..."}` —
+  e.g. `before-and-after-performance` for a TUTORIAL-tier account) was retried
+  up to the consecutive-403 threshold and then classified as `banned`. A single
+  call to a permission-gated endpoint thus mislabelled a perfectly healthy
+  account as banned — and an upstream pool monitor acting on that signal could
+  retire a good account. Such 403s are now terminal on the first response
+  (no futile retries against an authorization wall) and never feed the ban
+  streak. Only **opaque** 403s (no DRF `detail` body — edge blocks, real bans)
+  still drive ban detection.
+
+### Added
+- **New error kind `permission_denied`** (exit code 6, `API`) with public
+  `PermissionDeniedError{Status, Detail, Body}` type and `AsPermissionDeniedError`
+  unwrap helper. `Classify` maps it with `details = {status, detail, body}`. The
+  MCP error guidance and `describe` / `sdk-protocol.md` taxonomy were updated to
+  list it. Agents should branch: `permission_denied` ⇒ this account lacks access
+  to that endpoint (not a ban) — stop calling it, other endpoints still work.
+
+### Changed
+- **Wire-affecting:** a DRF-`detail` 403 now surfaces as kind `permission_denied`
+  (exit 6) instead of `banned` (exit 4). Consumers branching on the kind/exit
+  code for that response class must update — hence the MINOR bump while on 0.x.
+
 ## [0.7.0] - 2026-06-11
 
 ### Added
@@ -351,6 +378,8 @@ Initial public release. Requires Go 1.26+.
 - pre-push git hook backstop: `go build`, full `go test -race` (no
   `-short`), and cross-compile smoke for all five release targets.
 
+[0.8.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/wh0amibjm/brainapi-go-sdk/compare/v0.5.0...v0.5.1

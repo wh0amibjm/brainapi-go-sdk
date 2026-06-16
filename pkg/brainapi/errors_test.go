@@ -33,6 +33,7 @@ func TestClassify(t *testing.T) {
 		{"api", &brainapi.APIError{Status: 500, Method: "GET", URL: "/x", Body: []byte("boom")}, "api"},
 		{"rate_limit", &brainapi.RateLimitError{Status: 429, RetryAfter: 5 * time.Second}, "rate_limit"},
 		{"banned", &brainapi.BannedError{Streak: 3}, "banned"},
+		{"permission_denied", &brainapi.PermissionDeniedError{Status: 403, Detail: "no perm"}, "permission_denied"},
 		{"not_verified", &brainapi.NotVerifiedError{Email: "x@y.com", Status: 403}, "not_verified"},
 		{"drf_validation", &brainapi.DRFError{Status: 400, Fields: map[string][]string{"email": {"required"}}}, "drf_validation"},
 		{"persona_inquiry", &brainapi.PersonaInquiryError{Inquiry: "inq_abc"}, "persona_inquiry"},
@@ -103,6 +104,8 @@ func TestErrorStrings(t *testing.T) {
 		{"RateLimitError", &brainapi.RateLimitError{Status: 429, RetryAfter: 5 * time.Second}, "rate-limited"},
 		{"BannedError-no-reason", &brainapi.BannedError{Streak: 3}, "banned after 3"},
 		{"BannedError-with-reason", &brainapi.BannedError{Streak: 5, Reason: "auth fail"}, "auth fail"},
+		{"PermissionDeniedError-no-detail", &brainapi.PermissionDeniedError{Status: 403}, "permission denied (HTTP 403)"},
+		{"PermissionDeniedError-with-detail", &brainapi.PermissionDeniedError{Status: 403, Detail: "nope"}, "nope"},
 		{"NotVerifiedError-no-email", &brainapi.NotVerifiedError{}, "not verified"},
 		{"NotVerifiedError-with-email", &brainapi.NotVerifiedError{Email: "x@y.com"}, "x@y.com"},
 		{"DRFError", &brainapi.DRFError{Status: 400, Fields: map[string][]string{"email": {"required"}}}, "fields=[email]"},
@@ -146,5 +149,14 @@ func TestErrorHelpers_UnwrapTypedErrors(t *testing.T) {
 	}
 	if _, ok := brainapi.AsDRFError(errors.New("plain")); ok {
 		t.Error("AsDRFError should reject plain error")
+	}
+
+	pdErr := &brainapi.PermissionDeniedError{Status: 403, Detail: "no perm"}
+	wrapped4 := errors.Join(errors.New("outer"), pdErr)
+	if got, ok := brainapi.AsPermissionDeniedError(wrapped4); !ok || got.Status != 403 {
+		t.Errorf("AsPermissionDeniedError: got=%v ok=%v", got, ok)
+	}
+	if _, ok := brainapi.AsPermissionDeniedError(errors.New("plain")); ok {
+		t.Error("AsPermissionDeniedError should reject plain error")
 	}
 }

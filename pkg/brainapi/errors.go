@@ -90,6 +90,32 @@ func (e *NotVerifiedError) Error() string {
 	return "brainapi: account not verified"
 }
 
+// PermissionDeniedError is returned for a 403 carrying the Django REST
+// framework permission/authentication envelope — a JSON object with a
+// top-level "detail" string, e.g.
+//
+//	{"detail": "You do not have permission to perform this action."}
+//
+// Unlike an opaque 403 (Cloudflare edge block, an actual account ban), this is
+// a well-formed authorization boundary scoped to the specific endpoint: the
+// account is healthy and other endpoints still work for it. Retrying never
+// clears it, and it must NOT feed the consecutive-403 ban streak — otherwise a
+// single call to a permission-gated endpoint would self-trip the ban flag and
+// mislabel a healthy account as banned. The Detail string is locale-dependent
+// (BRAIN localizes it); keep it for display only and branch on the kind.
+type PermissionDeniedError struct {
+	Status int
+	Detail string
+	Body   []byte
+}
+
+func (e *PermissionDeniedError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("brainapi: permission denied (HTTP %d): %s", e.Status, e.Detail)
+	}
+	return fmt.Sprintf("brainapi: permission denied (HTTP %d)", e.Status)
+}
+
 // DRFError carries the Django REST framework field-validation envelope:
 //
 //	{"<field>": ["<msg>", ...], ...}
@@ -149,6 +175,15 @@ func AsDRFError(err error) (*DRFError, bool) {
 	return nil, false
 }
 
+// AsPermissionDeniedError unwraps to *PermissionDeniedError if err carries one.
+func AsPermissionDeniedError(err error) (*PermissionDeniedError, bool) {
+	var e *PermissionDeniedError
+	if errors.As(err, &e) {
+		return e, true
+	}
+	return nil, false
+}
+
 // Classify maps any error produced by this package into a stable, machine-
 // matchable kind string and a structured details map. It is the single source
 // of truth for the SDK's error taxonomy: the CLI renders it as its
@@ -157,9 +192,9 @@ func AsDRFError(err error) (*DRFError, bool) {
 //
 // Branch on the returned kind, never on the human-readable message — DRF
 // validation messages are locale-dependent. The kinds are: api, rate_limit,
-// banned, not_verified, drf_validation, persona_inquiry, budget,
-// not_authenticated, cooldown, long_poll_exceeded, context, invalid_argument,
-// network, error. A nil error yields ("", nil).
+// banned, permission_denied, not_verified, drf_validation, persona_inquiry,
+// budget, not_authenticated, cooldown, long_poll_exceeded, context,
+// invalid_argument, network, error. A nil error yields ("", nil).
 func Classify(err error) (kind string, details map[string]any) {
 	if err == nil {
 		return "", nil
@@ -168,6 +203,7 @@ func Classify(err error) (kind string, details map[string]any) {
 		apiErr     *APIError
 		rlErr      *RateLimitError
 		banErr     *BannedError
+		pdErr      *PermissionDeniedError
 		drfErr     *DRFError
 		nvErr      *NotVerifiedError
 		personaErr *PersonaInquiryError
@@ -186,6 +222,10 @@ func Classify(err error) (kind string, details map[string]any) {
 		}
 	case errors.As(err, &banErr):
 		return "banned", map[string]any{"streak": banErr.Streak, "reason": banErr.Reason}
+	case errors.As(err, &pdErr):
+		return "permission_denied", map[string]any{
+			"status": pdErr.Status, "detail": pdErr.Detail, "body": jsonOrString(pdErr.Body),
+		}
 	case errors.As(err, &drfErr):
 		return "drf_validation", map[string]any{"status": drfErr.Status, "url": drfErr.URL, "fields": drfErr.Fields}
 	case errors.As(err, &nvErr):
@@ -223,6 +263,22 @@ func jsonOrString(b []byte) any {
 		return json.RawMessage(b)
 	}
 	return trimmed
+}
+
+// drfDetail extracts the top-level "detail" string from a Django REST framework
+// APIException envelope ({"detail": "..."}) — the shape DRF uses for
+// PermissionDenied / NotAuthenticated / AuthenticationFailed. Returns
+// ("", false) when body is not a JSON object, carries no "detail" key, or the
+// value is empty / non-string. Used to tell a structured permission 403 apart
+// from an opaque edge-block 403 so only the latter feeds ban detection.
+func drfDetail(body []byte) (string, bool) {
+	var env struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || env.Detail == "" {
+		return "", false
+	}
+	return env.Detail, true
 }
 
 // decodeBody unmarshals a response body into a fresh T, wrapping any parse
