@@ -40,15 +40,32 @@ const (
 
 // Global flags shared by every subcommand.
 type globalFlags struct {
-	baseURL   string
-	profile   string
-	proxy     string
-	cookieJar string
-	email     string
-	password  string
-	timeout   time.Duration
-	logLevel  string
-	output    string
+	baseURL      string
+	profile      string
+	proxy        string
+	cookieJar    string
+	email        string
+	password     string
+	timeout      time.Duration
+	maxLongPolls int
+	logLevel     string
+	output       string
+}
+
+// defaultMaxLongPolls is the poll cap when the flag is unset / non-positive.
+// Mirrors Options.MaxLongPolls's own zero-value default so the CLI and the
+// library agree on 60.
+const defaultMaxLongPolls = 60
+
+// resolveMaxLongPolls normalizes the --max-long-polls flag: a non-positive value
+// falls back to the default. A slow multi-simulation (parent running up to 10
+// children sequentially) can outrun the 60-poll default, so `wait-multi` callers
+// raise it; every other command keeps 60.
+func resolveMaxLongPolls(v int) int {
+	if v <= 0 {
+		return defaultMaxLongPolls
+	}
+	return v
 }
 
 var gf globalFlags
@@ -80,6 +97,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&gf.email, "user", "", "Account email (or $BRAINAPI_USER)")
 	pf.StringVar(&gf.password, "pass", "", "Account password (or $BRAINAPI_PASS)")
 	pf.DurationVar(&gf.timeout, "timeout", 15*time.Second, "Per-request HTTP timeout")
+	pf.IntVar(&gf.maxLongPolls, "max-long-polls", defaultMaxLongPolls, "Max long-poll iterations for wait loops (raise for slow multi-simulations)")
 	pf.StringVar(&gf.logLevel, "log-level", "warn", "Log level: error|warn|info|debug")
 	pf.StringVar(&gf.output, "output", "json", "Output format (only 'json' is currently supported)")
 
@@ -122,7 +140,7 @@ func newClient(_ *cobra.Command) (*brainapi.Client, error) {
 		CookieJarPath: jarPath,
 		Timeout:       gf.timeout,
 		MaxRetries:    3,
-		MaxLongPolls:  60,
+		MaxLongPolls:  resolveMaxLongPolls(gf.maxLongPolls),
 		BanThreshold:  3,
 		Logger:        logger,
 		CaptchaSolver: altcha.CaptchaAdapter{Workers: runtime.NumCPU()},
