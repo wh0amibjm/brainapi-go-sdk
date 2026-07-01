@@ -98,6 +98,17 @@ func (r *rawResponse) retryAfter() (time.Duration, bool) {
 	return parseRetryAfter(r.header.Get("Retry-After"))
 }
 
+// rateLimit reads the X-Ratelimit-* daily-quota headers off a response (present
+// on POST /simulations). Returns a zero-value RateLimit{Present:false} when the
+// server sent none.
+func (r *rawResponse) rateLimit() RateLimit {
+	return parseRateLimit(
+		r.header.Get("X-Ratelimit-Limit"),
+		r.header.Get("X-Ratelimit-Remaining"),
+		r.header.Get("X-Ratelimit-Reset"),
+	)
+}
+
 // do executes a single HTTP round-trip via tls-client. Caller is responsible
 // for retry / classification / cookie persistence — keep doRT minimal.
 func (t *tlsHTTP) do(ctx context.Context, r rawRequest) (*rawResponse, error) {

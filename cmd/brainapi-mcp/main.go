@@ -364,8 +364,11 @@ func registerWriteTools(s *mcp.Server, cl *brainapi.Client) {
 
 	addTool(s, "simulations_create", "POST /simulations — DESTRUCTIVE: consumes simulation quota. Provide a SimulationRequest: 'type' (REGULAR|SUPER|COMBO), the alpha expression in 'regular' (or 'super'), and 'settings' (instrumentType, region, universe, delay, decay, neutralization, truncation, …). Returns the simulation id; poll it with wait_simulation.",
 		func(ctx context.Context, in brainapi.SimulationRequest) (locResult, error) {
-			loc, err := cl.CreateSimulation(ctx, in)
-			return locResult{Location: loc}, err
+			res, err := cl.CreateSimulation(ctx, in)
+			if err != nil {
+				return locResult{}, err
+			}
+			return locResult{Location: res.ID}, nil
 		})
 
 	addTool(s, "register", "POST /users — DESTRUCTIVE: creates an account. Provide a RegisterInput: email, firstName, lastName, fullName, gender, address{country,…}, education{university, major, degree (BACHELORS|MASTERS|ASSOCIATE), graduationYear}, auxiliary{agree, password, confirmation}. The Altcha captcha is auto-solved by the SDK — leave auxiliary.captcha empty.",

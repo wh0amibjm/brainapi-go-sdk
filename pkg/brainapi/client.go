@@ -310,6 +310,38 @@ func (c *Client) checkBudget(kind string) error {
 	return nil
 }
 
+// checkBudgetN reserves n budget units atomically (all-or-nothing): it returns
+// ErrDailyBudgetExhausted WITHOUT incrementing when the batch would overrun the
+// daily gate, otherwise increments by n in one step. Used by multi-simulation
+// so a partial batch can never leak k-1 units for a POST that never leaves the
+// client. n <= 1 collapses to checkBudget's single-unit semantics.
+func (c *Client) checkBudgetN(kind string, n int) error {
+	if n <= 1 {
+		return c.checkBudget(kind)
+	}
+	day := challengeDayStr(c.now())
+	c.budgetMu.Lock()
+	defer c.budgetMu.Unlock()
+	if c.budgetDay != day {
+		c.budgetDay = day
+		c.budgetSims = 0
+		c.budgetSubs = 0
+	}
+	switch kind {
+	case "sim":
+		if c.dailyBudget.Sims > 0 && c.budgetSims+n > c.dailyBudget.Sims {
+			return ErrDailyBudgetExhausted
+		}
+		c.budgetSims += n
+	case "submit":
+		if c.dailyBudget.Submits > 0 && c.budgetSubs+n > c.dailyBudget.Submits {
+			return ErrDailyBudgetExhausted
+		}
+		c.budgetSubs += n
+	}
+	return nil
+}
+
 // challengeDayStr returns the BRAIN challenge-day string: each submission is
 // attributed to its EDT (fixed UTC-4) calendar day by the MIDNIGHT (00:00)
 // boundary — NOT DST-aware Eastern, so the boundary stays at 04:00 UTC all

@@ -230,16 +230,41 @@ type Verdict struct {
 	HTTP   int     `json:"http,omitempty"`
 }
 
-// Simulation is the body of GET /simulations/{id}.
+// Simulation is the body of GET /simulations/{id}. It doubles as a
+// multi-simulation PARENT (Children populated, no Alpha) and CHILD (Parent
+// populated, produces an Alpha).
 type Simulation struct {
 	ID       string          `json:"id,omitempty"`
+	Parent   string          `json:"parent,omitempty"`   // set when this sim is a multi-sim child
+	Children []string        `json:"children,omitempty"` // set when this sim is a multi-sim parent
 	Type     string          `json:"type,omitempty"`
 	Settings json.RawMessage `json:"settings,omitempty"`
 	Regular  json.RawMessage `json:"regular,omitempty"`
-	Status   string          `json:"status,omitempty"`   // COMPLETE | FAIL | ERROR | "" (still running)
-	Alpha    string          `json:"alpha,omitempty"`    // populated on COMPLETE
+	Status   string          `json:"status,omitempty"`   // WAITING|SIMULATING (running); COMPLETE|WARNING|CANCELLED|TIMEOUT|ERROR|FAIL (terminal)
+	Alpha    string          `json:"alpha,omitempty"`    // populated on COMPLETE/WARNING (single or child)
 	Message  string          `json:"message,omitempty"`  // populated on FAIL/ERROR
 	Progress *float64        `json:"progress,omitempty"` // [0..1] while running
+}
+
+// RateLimit is the daily simulation-quota snapshot parsed from the
+// X-Ratelimit-* headers of a POST /simulations response. Present is false when
+// the server did not send them. (BRAIN's CORS Access-Control-Expose-Headers
+// omits X-Ratelimit-*, so a browser fetch reads null — only the SDK/CLI can
+// see them.) Reset is the time until the quota resets (EST challenge-day).
+type RateLimit struct {
+	Limit     int           `json:"limit"`
+	Remaining int           `json:"remaining"`
+	Reset     time.Duration `json:"reset"`
+	Present   bool          `json:"present"`
+}
+
+// CreateSimulationResult is returned by CreateSimulation and
+// CreateMultiSimulation. ID is the simulation id from the Location header (the
+// PARENT id for a multi-simulation); RateLimit is the daily-quota snapshot from
+// the same response.
+type CreateSimulationResult struct {
+	ID        string    `json:"id"`
+	RateLimit RateLimit `json:"rateLimit"`
 }
 
 // SimulationRequest is the POST /simulations body.

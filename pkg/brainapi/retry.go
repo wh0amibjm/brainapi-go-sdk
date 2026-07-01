@@ -29,6 +29,42 @@ func parseRetryAfter(h string) (time.Duration, bool) {
 	return 0, false
 }
 
+// parseRateLimit builds a RateLimit from the three X-Ratelimit-* header
+// values (any may be empty). Present is true when at least one parsed, so a
+// caller can distinguish "quota unknown" from a genuine remaining==0.
+//
+// BRAIN sends all three headers together; a real Limit is never 0 and a real
+// Reset is always > 0. So when a header is absent its field stays at the 0
+// zero-value even though Present may be true (another header parsed) — consumers
+// MUST treat a 0 Limit or 0 Reset as UNKNOWN, not authoritative. Remaining==0 is
+// the one meaningful zero (quota exhausted).
+func parseRateLimit(limit, remaining, reset string) RateLimit {
+	l, okL := parseHeaderInt(limit)
+	rem, okR := parseHeaderInt(remaining)
+	rst, okReset := parseHeaderInt(reset)
+	rl := RateLimit{Limit: l, Remaining: rem, Present: okL || okR || okReset}
+	if okReset {
+		rl.Reset = time.Duration(rst) * time.Second
+	}
+	return rl
+}
+
+// parseHeaderInt parses a whole-number header value. BRAIN's X-Ratelimit-*
+// are integers ("5000", "4978", "53848"); tolerate a float form defensively.
+func parseHeaderInt(h string) (int, bool) {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return 0, false
+	}
+	if n, err := strconv.Atoi(h); err == nil {
+		return n, true
+	}
+	if f, err := strconv.ParseFloat(h, 64); err == nil {
+		return int(f), true
+	}
+	return 0, false
+}
+
 // clamp returns d bounded to [lo, hi]. Used to keep server-suggested
 // Retry-After values inside a sane range so a buggy edge can't make us
 // sleep forever or hammer immediately.
