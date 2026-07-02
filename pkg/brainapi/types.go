@@ -156,6 +156,26 @@ type SelfCorrelationBlock struct {
 	Max *float64 `json:"max,omitempty"`
 }
 
+// PowerPoolCorrelationBlock is the body returned by
+// GET /alphas/{id}/correlations/power-pool. Live probe (2026-07-02): the shape
+// is IDENTICAL to /correlations/self — schema.name = "selfCorrelation", records
+// are per-alpha positional tuples per Schema.Properties[*].Name (id, name,
+// instrumentType, region, universe, correlation, sharpe, returns, turnover,
+// fitness, margin), NOT the prod-corr histogram. Min/Max are the server-computed
+// signed correlation extremes across the Power Pool members.
+//
+// FAIL-OPEN on an EMPTY pool: a fresh Power-Pool account has no comparable PP
+// alpha, so the live probe returned records=[] with max=null (Min/Max nil).
+// Consumers MUST treat a nil Max as "no constraint / pool empty" (pass), never
+// as a zero correlation — gating on `*Max` without the nil guard would panic,
+// and treating nil as 0 would spuriously pass a real gate. Gate on
+// *Max < powerpool_corr_target (0.5) ONLY when Max is non-nil.
+type PowerPoolCorrelationBlock struct {
+	RecordSetBlock
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+}
+
 // ProdCorrelationBlock is the body returned by GET /alphas/{id}/correlations/prod.
 // Unlike /correlations/self (whose records are per-alpha tuples), the prod-corr
 // records form a HISTOGRAM: each record is a positional tuple [binMin, binMax,
@@ -342,6 +362,15 @@ type SimSettings struct {
 	// setting, IS/OS the only two modes). Exact JSON key ("componentActivation")
 	// is the doc's field name; the SDK does not hard-validate — the server is
 	// authority.
+	//
+	// UNVERIFIED as a sim setting (live OPTIONS /simulations probe, 2026-07-02):
+	// the schema does NOT list componentActivation in ANY casing / underscore
+	// form (only selection/combo are there), and it is absent from a REGULAR
+	// alpha's `settings` too. Its real home is still unconfirmed — it may be an
+	// alpha-level PATCH attribute rather than a sim setting. Kept here because
+	// omitempty means "not set => not sent", so an unverified field can ship
+	// harmlessly until the FIRST SUPER simulation confirms where the server
+	// reads it. Do NOT assume a SUPER sim will honor it until verified.
 	ComponentActivation string `json:"componentActivation,omitempty"`
 }
 
@@ -494,15 +523,39 @@ type DatasetsPage struct {
 	Results []Dataset `json:"results"`
 }
 
+// DataCategory is one item from GET /data-categories. Live probe (2026-07-02):
+// the endpoint returns a BARE JSON array (no {count, results} envelope) of
+// category descriptors. Each carries a category-level ValueScore (float — the
+// under-utilization signal, aggregated over the category's datasets), the list
+// of Regions the category covers, crowding/size counts, and a Children array of
+// subcategories with the same shape. All the numeric signals are pointers so an
+// absent field decodes as nil rather than a misleading 0.
+type DataCategory struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	// ValueScore is the category-level Dataset Value Score (float, higher = more
+	// under-utilized). Pointer: nil when absent.
+	ValueScore *float64 `json:"valueScore,omitempty"`
+	// Region is the list of regions the category has data for (probe: an array).
+	Region       []string       `json:"region,omitempty"`
+	DatasetCount *int           `json:"datasetCount,omitempty"`
+	FieldCount   *int           `json:"fieldCount,omitempty"`
+	AlphaCount   *int           `json:"alphaCount,omitempty"`
+	UserCount    *int           `json:"userCount,omitempty"`
+	Children     []DataCategory `json:"children,omitempty"`
+}
+
 // Theme is one BRAIN consultant Theme (a region/dataset/delay bonus running
 // 1-3 weeks). A submitted alpha that satisfies a theme earns a QualityFactor
 // multiplier; when several themes overlap the final multiplier is
 // sum(multipliers) - count(themes) + 1 (themes/multiplier-rules.md).
 //
-// No local reference doc pins the /themes response schema, so this decodes the
-// most likely keys and carries a Raw fallback with the whole object — a caller
-// can extract additional fields once an active probe confirms the real shape.
-// Multiplier is a pointer so an absent value decodes as nil, not 0.
+// PROBED 404 (2026-07-02): there is no /themes endpoint (see Client.Themes) —
+// this type is now vestigial. The API-authoritative "multiplier in effect"
+// signal is Dataset.PyramidMultiplier off /data-sets; the human-readable theme
+// calendar is the Learn page learn/documentation/themes/consgrpdefault. The
+// Raw fallback + pointer Multiplier are retained so a future real endpoint
+// decodes without a code change.
 type Theme struct {
 	ID         string          `json:"id,omitempty"`
 	Name       string          `json:"name,omitempty"`

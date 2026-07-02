@@ -395,6 +395,41 @@ func (c *Client) AlphaProdCorrelation(ctx context.Context, id string) (*ProdCorr
 	return b, nil
 }
 
+// AlphaPowerPoolCorrelation calls GET /alphas/{id}/correlations/power-pool and
+// long-polls until BRAIN returns the alpha's correlation to the Power Pool
+// members. Live probe (2026-07-02): same long-poll handshake as the sibling
+// self/prod endpoints (200 + Retry-After + empty body while computing, then
+// 200 + body), and the SAME body shape as /correlations/self —
+// schema.name = "selfCorrelation", per-alpha records, top-level min/max — NOT
+// the prod-corr histogram. Hence it reuses SelfCorrelation's decode path exactly.
+//
+// EMPTY-POOL fail-open: a new Power-Pool account has no comparable PP alpha, so
+// the probe returned records=[] with max=null. A nil block.Max therefore means
+// "pool empty / no constraint", and callers MUST fail-OPEN on it (submit-side
+// gates treat nil Max and a fetch error alike as "pass") rather than block.
+// Gate on *block.Max < 0.5 only when Max is non-nil.
+func (c *Client) AlphaPowerPoolCorrelation(ctx context.Context, id string) (*PowerPoolCorrelationBlock, error) {
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/alphas/" + id + "/correlations/power-pool",
+		hints:  retryHints{longPoll503: true, longPoll200Empty: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.body) == 0 {
+		return nil, ErrLongPollExceeded
+	}
+	b, err := decodeBody[PowerPoolCorrelationBlock](resp.body, "power-pool-correlation")
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 // ListAlphas returns the first page of GET /users/self/alphas with the
 // supplied options. Use ListAlphasAll for an iterator over all pages.
 func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[Alpha], error) {
