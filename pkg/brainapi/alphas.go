@@ -270,6 +270,62 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 	return s, nil
 }
 
+// AlphaRecordSet calls GET /alphas/{id}/recordsets/{name} and long-polls until
+// the recordset is populated (same cold-cache long-poll semantics as AlphaPnL:
+// 200 + Retry-After + empty body while still computing). Returns the generic
+// {schema, records} envelope so callers can decode any positional recordset —
+// yearly-stats, IS-Ladder, the VISUALIZATION feeds — via Schema.Properties.
+//
+// AlphaPnL keeps its typed *PnLSeries wrapper (selfcorr.go depends on it); this
+// is the generic escape hatch for the OTHER recordset names. Discover the
+// available names with AlphaRecordSets.
+func (c *Client) AlphaRecordSet(ctx context.Context, alphaID, name string) (*RecordSetBlock, error) {
+	if err := requireNonEmpty(alphaID, "alpha id"); err != nil {
+		return nil, err
+	}
+	if err := requireNonEmpty(name, "recordset name"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/alphas/" + alphaID + "/recordsets/" + name,
+		hints: retryHints{
+			longPoll200Empty: true,
+			maxLongPolls:     6,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.body) == 0 {
+		return nil, ErrLongPollExceeded
+	}
+	b, err := decodeBody[RecordSetBlock](resp.body, "recordset")
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// AlphaRecordSets calls GET /alphas/{id}/recordsets and returns the list of
+// available recordset descriptors for the alpha (the names you can pass to
+// AlphaRecordSet). The body is returned as raw JSON — its shape is a dynamic
+// list of {name, ...} entries and is passed through untyped so a new recordset
+// kind never breaks the decode.
+func (c *Client) AlphaRecordSets(ctx context.Context, alphaID string) (json.RawMessage, error) {
+	if err := requireNonEmpty(alphaID, "alpha id"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/alphas/" + alphaID + "/recordsets",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(resp.body), nil
+}
+
 // AlphaSelfCorrelation calls GET /alphas/{id}/correlations/self and long-polls
 // until BRAIN returns the top-N most-correlated already-submitted alphas plus
 // min/max aggregates. Cached server-side after the first run per alpha;
@@ -284,8 +340,8 @@ func (c *Client) AlphaPnL(ctx context.Context, id string) (*PnLSeries, error) {
 // the post-submit SELF_CORRELATION check and burn a DailyBudget.Submits slot
 // for nothing. This endpoint itself is free of submit-budget cost.
 //
-// Sibling /correlations/prod returns 403 on the IQC consultant tier through
-// July 2026 and is not exposed by the SDK.
+// Sibling /correlations/prod is exposed by AlphaProdCorrelation (the CONSULTANT
+// tier upgrade lifted its former 403).
 func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorrelationBlock, error) {
 	if err := requireNonEmpty(id, "alpha id"); err != nil {
 		return nil, err
@@ -302,6 +358,37 @@ func (c *Client) AlphaSelfCorrelation(ctx context.Context, id string) (*SelfCorr
 		return nil, ErrLongPollExceeded
 	}
 	b, err := decodeBody[SelfCorrelationBlock](resp.body, "self-correlation")
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// AlphaProdCorrelation calls GET /alphas/{id}/correlations/prod and long-polls
+// until BRAIN returns the alpha's correlation to the whole PRODUCTION alpha pool
+// — a histogram of production-alpha counts per correlation bin plus the signed
+// min/max aggregates. Same long-poll semantics as AlphaSelfCorrelation
+// (200 + Retry-After + empty body while still computing; 503 on some tiers).
+//
+// Use BEFORE SubmitAlpha alongside AlphaSelfCorrelation: gate on *block.Max >=
+// 0.7. A candidate can pass the self-corr gate (max vs your own submitted book)
+// yet fail here (max vs all BRAIN production alphas), so both gates matter.
+func (c *Client) AlphaProdCorrelation(ctx context.Context, id string) (*ProdCorrelationBlock, error) {
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/alphas/" + id + "/correlations/prod",
+		hints:  retryHints{longPoll503: true, longPoll200Empty: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.body) == 0 {
+		return nil, ErrLongPollExceeded
+	}
+	b, err := decodeBody[ProdCorrelationBlock](resp.body, "prod-correlation")
 	if err != nil {
 		return nil, err
 	}

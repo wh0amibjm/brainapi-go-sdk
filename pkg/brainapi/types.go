@@ -156,6 +156,24 @@ type SelfCorrelationBlock struct {
 	Max *float64 `json:"max,omitempty"`
 }
 
+// ProdCorrelationBlock is the body returned by GET /alphas/{id}/correlations/prod.
+// Unlike /correlations/self (whose records are per-alpha tuples), the prod-corr
+// records form a HISTOGRAM: each record is a positional tuple [binMin, binMax,
+// count] per Schema.Properties[*].Name (min, max, alphas) — the number of BRAIN
+// PRODUCTION alphas whose correlation to this alpha falls in [binMin, binMax).
+// Min/Max are the server-computed signed correlation extremes across the whole
+// production pool.
+//
+// Gate on *Max: BRAIN rejects on the SELF_CORRELATION-style prod check at
+// correlation >= 0.7 (ACE's check_prod_corr_test uses the same top-level max).
+// A trivial rank(close) alpha was observed with self-corr max 0.52 (passes) but
+// prod-corr max 0.88 (fails) — the prod gate catches twins the self gate cannot.
+type ProdCorrelationBlock struct {
+	RecordSetBlock
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+}
+
 // PerformanceStats is one side (before or after) of a BeforeAndAfterPerformance
 // comparison: the aggregate metrics the alpha would carry.
 type PerformanceStats struct {
