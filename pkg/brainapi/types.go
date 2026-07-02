@@ -333,6 +333,16 @@ type SimSettings struct {
 	SelectionHandling string `json:"selectionHandling,omitempty"`
 	// SelectionLimit is the max number of instruments the SUPER selection keeps.
 	SelectionLimit int `json:"selectionLimit,omitempty"`
+	// ComponentActivation ∈ {"IS","OS"}: for a SUPER alpha, when each component
+	// alpha starts contributing to the combo — from its In-Sample start ("IS",
+	// longer 10y history, overfit-prone) or its Out-of-Sample start ("OS",
+	// overfit-resistant, the OS reality check). SuperAlpha-only; omitempty so
+	// REGULAR/COMBO round-trip byte-for-byte. Enum + semantics per the BRAIN
+	// superalpha-overview.md "Component Activation" section (confirmed a SUPER
+	// setting, IS/OS the only two modes). Exact JSON key ("componentActivation")
+	// is the doc's field name; the SDK does not hard-validate — the server is
+	// authority.
+	ComponentActivation string `json:"componentActivation,omitempty"`
 }
 
 // Operator is one item from GET /operators (bare array).
@@ -371,6 +381,151 @@ type DataField struct {
 type NamedRef struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// Dataset is one item from GET /data-sets results[]. It mirrors the Data
+// Explorer "Datasets" tab: a dataset groups many data-fields and carries the
+// crowding / value signals a consultant steers on.
+//
+// ValueScore is the CONSULTANT-only "Dataset Value Score" — a measure of a
+// dataset's UNDER-utilization; consultants are advised to research datasets
+// with a HIGHER value score (glossary.md: "Dataset Value Score"). It is a
+// pointer so an absent field (non-consultant tier, or a schema that predates
+// it) decodes as nil rather than a misleading 0. PyramidMultiplier is the
+// Dynamic Pyramid Theme multiplier shown on the Dataset page
+// (themes/overview-themes.md) — also a pointer, present only when a pyramid
+// theme is live for the dataset.
+//
+// The exact JSON key names for ValueScore / PyramidMultiplier are NOT pinned by
+// any local reference doc (brain-api.md documents /data-fields but not
+// /data-sets), so the struct decodes a few plausible aliases via a custom
+// UnmarshalJSON and the SDK never hard-requires them (all pointer/omitempty).
+// This keeps the endpoint fail-open pending an active probe against the live
+// /data-sets response — see schema.go Datasets doc.
+type Dataset struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Region      string   `json:"region,omitempty"`
+	Universe    string   `json:"universe,omitempty"`
+	Delay       int      `json:"delay,omitempty"`
+	Category    NamedRef `json:"category,omitempty"`
+	Subcategory NamedRef `json:"subcategory,omitempty"`
+	Coverage    *float64 `json:"coverage,omitempty"`
+	// FieldCount is the number of data-fields in the dataset (BRAIN sends it as
+	// "fieldCount" or "valueFieldCount" depending on payload; both decoded).
+	FieldCount *int `json:"fieldCount,omitempty"`
+	AlphaCount *int `json:"alphaCount,omitempty"`
+	UserCount  *int `json:"userCount,omitempty"`
+	// ValueScore is the Dataset Value Score (consultant-only, higher = more
+	// under-utilized = more valuable to research). Pointer: nil when absent.
+	ValueScore *float64 `json:"valueScore,omitempty"`
+	// PyramidMultiplier is the Dynamic Pyramid Theme multiplier (nil when the
+	// dataset has no live pyramid theme).
+	PyramidMultiplier *float64   `json:"pyramidMultiplier,omitempty"`
+	Themes            []NamedRef `json:"themes,omitempty"`
+}
+
+// UnmarshalJSON decodes a Dataset from the live /data-sets payload, tolerating
+// the field-name uncertainty around the consultant-only signals. It first
+// decodes the stable keys via an alias, then rescues ValueScore /
+// PyramidMultiplier / FieldCount from any of their plausible aliases so a schema
+// drift (or an active-probe-confirmed rename) does not silently drop the signal.
+func (d *Dataset) UnmarshalJSON(b []byte) error {
+	type alias Dataset
+	var a alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	*d = Dataset(a)
+	// Rescue the loosely-named / uncertain keys from a generic map.
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil // stable fields already decoded; tolerate a partial rescue
+	}
+	if d.ValueScore == nil {
+		d.ValueScore = firstFloatPtr(m, "valueScore", "value_score", "datasetValueScore")
+	}
+	if d.PyramidMultiplier == nil {
+		d.PyramidMultiplier = firstFloatPtr(m, "pyramidMultiplier", "pyramid_multiplier", "multiplier")
+	}
+	if d.FieldCount == nil {
+		d.FieldCount = firstIntPtr(m, "fieldCount", "valueFieldCount", "fieldsCount")
+	}
+	return nil
+}
+
+// firstFloatPtr returns a pointer to the first key in keys that decodes to a
+// float, or nil.
+func firstFloatPtr(m map[string]json.RawMessage, keys ...string) *float64 {
+	for _, k := range keys {
+		if raw, ok := m[k]; ok {
+			var f float64
+			if json.Unmarshal(raw, &f) == nil {
+				return &f
+			}
+		}
+	}
+	return nil
+}
+
+// firstIntPtr returns a pointer to the first key in keys that decodes to an int,
+// or nil.
+func firstIntPtr(m map[string]json.RawMessage, keys ...string) *int {
+	for _, k := range keys {
+		if raw, ok := m[k]; ok {
+			var i int
+			if json.Unmarshal(raw, &i) == nil {
+				return &i
+			}
+		}
+	}
+	return nil
+}
+
+// DatasetsPage is the GET /data-sets envelope ({count, results}) mirroring
+// DataFieldsPage.
+type DatasetsPage struct {
+	Count   int       `json:"count"`
+	Results []Dataset `json:"results"`
+}
+
+// Theme is one BRAIN consultant Theme (a region/dataset/delay bonus running
+// 1-3 weeks). A submitted alpha that satisfies a theme earns a QualityFactor
+// multiplier; when several themes overlap the final multiplier is
+// sum(multipliers) - count(themes) + 1 (themes/multiplier-rules.md).
+//
+// No local reference doc pins the /themes response schema, so this decodes the
+// most likely keys and carries a Raw fallback with the whole object — a caller
+// can extract additional fields once an active probe confirms the real shape.
+// Multiplier is a pointer so an absent value decodes as nil, not 0.
+type Theme struct {
+	ID         string          `json:"id,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Multiplier *float64        `json:"multiplier,omitempty"`
+	Region     string          `json:"region,omitempty"`
+	Delay      *int            `json:"delay,omitempty"`
+	StartDate  string          `json:"startDate,omitempty"`
+	EndDate    string          `json:"endDate,omitempty"`
+	Datasets   []NamedRef      `json:"datasets,omitempty"`
+	Raw        json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON decodes a Theme, rescuing the multiplier from its plausible
+// aliases and preserving the full object in Raw.
+func (t *Theme) UnmarshalJSON(b []byte) error {
+	type alias Theme
+	var a alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	*t = Theme(a)
+	t.Raw = append(t.Raw[:0], b...)
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err == nil && t.Multiplier == nil {
+		t.Multiplier = firstFloatPtr(m, "multiplier", "qualityFactorMultiplier", "qfMultiplier", "value")
+	}
+	return nil
 }
 
 // Competition is one item of GET /users/self/competitions results[].
