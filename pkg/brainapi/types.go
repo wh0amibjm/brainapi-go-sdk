@@ -287,11 +287,14 @@ type CreateSimulationResult struct {
 
 // SimulationRequest is the POST /simulations body.
 type SimulationRequest struct {
-	Type     string          `json:"type"` // "REGULAR" | "SUPER" | "COMBO"
-	Regular  string          `json:"regular,omitempty"`
-	Super    string          `json:"super,omitempty"`
-	Settings SimSettings     `json:"settings"`
-	Combo    json.RawMessage `json:"combo,omitempty"`
+	Type    string `json:"type"` // "REGULAR" | "SUPER" | "COMBO"
+	Regular string `json:"regular,omitempty"`
+	Super   string `json:"super,omitempty"`
+	// Selection is the SUPER-alpha selection expression (the second leg of a
+	// SUPER alpha alongside Super). omitempty so REGULAR/COMBO round-trip clean.
+	Selection string          `json:"selection,omitempty"`
+	Settings  SimSettings     `json:"settings"`
+	Combo     json.RawMessage `json:"combo,omitempty"`
 }
 
 // SimSettings captures the simulate-time knobs. Fields match BRAIN's exact
@@ -310,6 +313,26 @@ type SimSettings struct {
 	NanHandling    string  `json:"nanHandling"`
 	Language       string  `json:"language"`
 	Visualization  bool    `json:"visualization"`
+
+	// The following are CONSULTANT-era knobs, all omitempty so an existing
+	// SimulationRequest that omits them still round-trips byte-for-byte through
+	// the SDK. Enum values below are from the live OPTIONS /simulations schema
+	// (2026-07-01); the SDK does NOT hard-validate them — the server is the
+	// authority — but the exact accepted values are documented here.
+
+	// TestPeriod is an ISO-8601 duration string (e.g. "P2Y", "P6M") selecting
+	// the out-of-sample test window length. Empty = BRAIN default.
+	TestPeriod string `json:"testPeriod,omitempty"`
+	// MaxTrade ∈ {"OFF","ON"}: cap per-name trade size. Some regions
+	// (ASI/JPN/HKG/KOR/TWN) require "ON".
+	MaxTrade string `json:"maxTrade,omitempty"`
+	// MaxPosition ∈ {"OFF","ON"}: cap per-name position size.
+	MaxPosition string `json:"maxPosition,omitempty"`
+	// SelectionHandling ∈ {"POSITIVE","NON_ZERO","NON_NAN"}: how the SUPER
+	// alpha selection expression's output is interpreted.
+	SelectionHandling string `json:"selectionHandling,omitempty"`
+	// SelectionLimit is the max number of instruments the SUPER selection keeps.
+	SelectionLimit int `json:"selectionLimit,omitempty"`
 }
 
 // Operator is one item from GET /operators (bare array).
