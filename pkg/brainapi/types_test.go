@@ -47,7 +47,7 @@ func TestSimSettings_NewFieldsOmitemptyRoundTrip(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(out)
-	for _, k := range []string{"testPeriod", "maxTrade", "maxPosition", "selectionHandling", "selectionLimit", "selection", "super"} {
+	for _, k := range []string{"testPeriod", "maxTrade", "maxPosition", "selectionHandling", "selectionLimit", "selection", "super", "componentActivation"} {
 		if strings.Contains(s, `"`+k+`"`) {
 			t.Errorf("omitted field %q leaked into wire form: %s", k, s)
 		}
@@ -73,6 +73,7 @@ func TestSimSettings_NewFieldsEmitWhenSet(t *testing.T) {
 			InstrumentType: "EQUITY", Region: "USA", Universe: "TOP3000", Delay: 1,
 			TestPeriod: "P2Y", MaxTrade: "ON", MaxPosition: "OFF",
 			SelectionHandling: "NON_ZERO", SelectionLimit: 100,
+			ComponentActivation: "OS",
 		},
 	}
 	out, err := json.Marshal(req)
@@ -83,10 +84,66 @@ func TestSimSettings_NewFieldsEmitWhenSet(t *testing.T) {
 	for _, want := range []string{
 		`"testPeriod":"P2Y"`, `"maxTrade":"ON"`, `"maxPosition":"OFF"`,
 		`"selectionHandling":"NON_ZERO"`, `"selectionLimit":100`, `"selection":"sel_expr"`,
+		`"componentActivation":"OS"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("expected %s in %s", want, s)
 		}
+	}
+}
+
+// Dataset decodes the consultant Value Score under any of its plausible key
+// aliases (valueScore / value_score) into a non-nil pointer, and leaves it nil
+// when the payload omits it (non-consultant tier).
+func TestDataset_ValueScoreAliasDecode(t *testing.T) {
+	var pages DatasetsPage
+	body := `{"count":3,"results":[
+		{"id":"a","name":"A","valueScore":8.7,"fieldCount":10},
+		{"id":"b","name":"B","value_score":9.5,"valueFieldCount":42},
+		{"id":"c","name":"C","alphaCount":50000}
+	]}`
+	if err := json.Unmarshal([]byte(body), &pages); err != nil {
+		t.Fatalf("unmarshal datasets: %v", err)
+	}
+	if len(pages.Results) != 3 {
+		t.Fatalf("want 3 datasets, got %d", len(pages.Results))
+	}
+	if pages.Results[0].ValueScore == nil || *pages.Results[0].ValueScore != 8.7 {
+		t.Errorf("valueScore alias not decoded: %+v", pages.Results[0])
+	}
+	if pages.Results[0].FieldCount == nil || *pages.Results[0].FieldCount != 10 {
+		t.Errorf("fieldCount not decoded: %+v", pages.Results[0])
+	}
+	if pages.Results[1].ValueScore == nil || *pages.Results[1].ValueScore != 9.5 {
+		t.Errorf("value_score alias not decoded: %+v", pages.Results[1])
+	}
+	if pages.Results[1].FieldCount == nil || *pages.Results[1].FieldCount != 42 {
+		t.Errorf("valueFieldCount alias not decoded: %+v", pages.Results[1])
+	}
+	if pages.Results[2].ValueScore != nil {
+		t.Errorf("absent valueScore should stay nil, got %v", *pages.Results[2].ValueScore)
+	}
+}
+
+// Theme decodes the multiplier from its plausible aliases and preserves the raw
+// object for later field extraction.
+func TestTheme_MultiplierAliasAndRaw(t *testing.T) {
+	var themes []Theme
+	body := `[{"id":"t1","name":"USA","multiplier":3},{"id":"t2","name":"DS","qualityFactorMultiplier":5}]`
+	if err := json.Unmarshal([]byte(body), &themes); err != nil {
+		t.Fatalf("unmarshal themes: %v", err)
+	}
+	if len(themes) != 2 {
+		t.Fatalf("want 2 themes, got %d", len(themes))
+	}
+	if themes[0].Multiplier == nil || *themes[0].Multiplier != 3 {
+		t.Errorf("multiplier not decoded: %+v", themes[0])
+	}
+	if themes[1].Multiplier == nil || *themes[1].Multiplier != 5 {
+		t.Errorf("qualityFactorMultiplier alias not decoded: %+v", themes[1])
+	}
+	if len(themes[1].Raw) == 0 {
+		t.Errorf("Raw fallback not populated")
 	}
 }
 

@@ -14,8 +14,71 @@ func newSchemaCmd() *cobra.Command {
 		Use:   "schema",
 		Short: "Static schema endpoints (operators, data-fields)",
 	}
-	cmd.AddCommand(newSchemaOperatorsCmd(), newSchemaDataFieldsCmd(), newSchemaSimulationOptionsCmd())
+	cmd.AddCommand(
+		newSchemaOperatorsCmd(),
+		newSchemaDataFieldsCmd(),
+		newSchemaSimulationOptionsCmd(),
+		newSchemaDatasetsCmd(),
+		newSchemaThemesCmd(),
+	)
 	return cmd
+}
+
+func newSchemaDatasetsCmd() *cobra.Command {
+	q := brainapi.DataFieldsQuery{
+		InstrumentType: "EQUITY",
+		Region:         "USA",
+		Universe:       "TOP3000",
+		Delay:          1,
+	}
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "datasets",
+		Short: "GET /data-sets: dataset catalog with consultant Dataset Value Score + pyramid multiplier (paginated). Path/field names inferred — verify via live probe.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			if !all {
+				page, err := cl.Datasets(ctx, q)
+				if err != nil {
+					writeErr(err)
+					return nil
+				}
+				writeOK(page)
+				return nil
+			}
+			sets, err := drainAll(cl.DatasetsAll(ctx, q))
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(map[string]any{"count": len(sets), "results": sets})
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&q.InstrumentType, "instrument-type", q.InstrumentType, "BRAIN instrumentType (required)")
+	cmd.Flags().StringVar(&q.Region, "region", q.Region, "Region (required)")
+	cmd.Flags().StringVar(&q.Universe, "universe", q.Universe, "Universe (required)")
+	cmd.Flags().IntVar(&q.Delay, "delay", q.Delay, "Delay 0 or 1 (required)")
+	cmd.Flags().IntVar(&q.Limit, "limit", 0, "Page size")
+	cmd.Flags().IntVar(&q.Offset, "offset", 0, "Pagination offset")
+	cmd.Flags().BoolVar(&all, "all", false, "Drain all pages")
+	return cmd
+}
+
+func newSchemaThemesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "themes",
+		Short: "GET /themes: currently-announced consultant Themes + QualityFactor multipliers. Path/schema inferred — verify via live probe; degrades on 404/403.",
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) ([]brainapi.Theme, error) {
+			return cl.Themes(ctx)
+		}),
+	}
 }
 
 func newSchemaSimulationOptionsCmd() *cobra.Command {
