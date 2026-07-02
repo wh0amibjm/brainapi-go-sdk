@@ -260,15 +260,6 @@ func (c *Client) Cooldown() time.Duration {
 	return d
 }
 
-func (c *Client) setCooldown(d time.Duration) {
-	c.cooldownMu.Lock()
-	defer c.cooldownMu.Unlock()
-	t := time.Now().Add(d)
-	if t.After(c.cooldownUntil) {
-		c.cooldownUntil = t
-	}
-}
-
 // reserveSimSlot acquires one of MaxConcurrentSims submission slots, bounding
 // the number of concurrent POST /simulations in flight (NOT the number of
 // simulations running on BRAIN — the slot is released once the create returns,
