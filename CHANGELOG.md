@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`SetAlphaProperties` + `alphas set-properties <id>`** — PATCH `/alphas/{id}`
+  to set an alpha's mutable PROPERTIES (`description`, `name`, `color`,
+  `category`, `tags`). Feeds the pure Power Pool submit flow: a Power Pool alpha
+  is not eligible until a >=100-char Idea+Rationale `description` sits in its
+  Properties section (BRAIN docs: getting-started-power-pool-alphas.md L54-73),
+  where the `PowerPoolSelected` tag also lives. `AlphaProperties` uses
+  pointer/slice `omitempty` fields so an unset field is OMITTED from the PATCH
+  body (byte-for-byte "not set => not sent"); the CLI only threads flags the user
+  explicitly passed. NOT a submission — does NOT consume a `DailyBudget.Submits`
+  slot. **CONTRACT UNVERIFIED**: endpoint + body keys are mirrored from the ACE
+  `set_alpha_properties` shape (flat top-level keys), NOT yet confirmed against a
+  live PATCH — in particular whether `description` is top-level or
+  `regular.description`, and the exact `tags` wire form. Confirm against a live
+  PATCH before relying on the exact key.
 - **`AlphaPowerPoolCorrelation` + `alphas corr-power-pool <id>`** — GET
   `/alphas/{id}/correlations/power-pool`. Live-probe-confirmed (2026-07-02): same
   long-poll handshake as `/correlations/self` and the SAME body shape

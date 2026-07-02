@@ -430,6 +430,72 @@ func (c *Client) AlphaPowerPoolCorrelation(ctx context.Context, id string) (*Pow
 	return b, nil
 }
 
+// AlphaProperties is the mutable-properties patch body for SetAlphaProperties.
+// Every field is a pointer / slice with `omitempty`, so a field left nil/empty
+// is OMITTED from the marshalled JSON entirely — the byte-for-byte "not set =>
+// not sent" contract. Callers set only what they want to change (PATCH is a
+// partial update).
+//
+// Primary use (alpha-toolkit pure Power Pool submits): write a >=100-char
+// Description (Idea + Rationale template) into the alpha's PROPERTIES section.
+// Per BRAIN docs (getting-started-power-pool-alphas.md, "Description of the
+// Power Pool Alpha"), a Power Pool alpha WITHOUT such a description is not
+// eligible; the "PowerPoolSelected" tag likewise lives in Properties → Tags.
+//
+// CONTRACT UNVERIFIED — the exact JSON body keys are NOT yet confirmed against a
+// live PATCH /alphas/{id}. In particular it is UNCONFIRMED whether `description`
+// belongs at the TOP LEVEL (as modelled here) or nested under `regular`
+// (i.e. `regular.description`), and the exact wire form of `tags` (bare string
+// array here vs. an object list) is likewise unverified. This mirror follows the
+// ACE library `set_alpha_properties` shape (flat top-level keys) as the most
+// likely form; confirm against a live PATCH before relying on the exact key, and
+// adjust the json tags here if the probe shows the nested/`regular.` home.
+type AlphaProperties struct {
+	Description *string  `json:"description,omitempty"`
+	Name        *string  `json:"name,omitempty"`
+	Color       *string  `json:"color,omitempty"`
+	Category    *string  `json:"category,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// SetAlphaProperties calls PATCH /alphas/{id} to update an alpha's mutable
+// PROPERTIES (description, name, color, category, tags) and returns the updated
+// alpha record parsed from the 200 body. Only the non-nil/non-empty fields of
+// props are sent (see AlphaProperties — omitempty gives the "not set => not
+// sent" byte-for-byte contract).
+//
+// This is the write path the pure Power Pool submit flow needs: a Power Pool
+// alpha is not eligible until a >=100-char Idea+Rationale description is present
+// in its Properties section (BRAIN docs: getting-started-power-pool-alphas.md
+// L54-73), and the "PowerPoolSelected" tag lives there too.
+//
+// Budget: this is a property EDIT, NOT a submission — it does NOT consume a
+// DailyBudget.Submits slot (no checkBudget call), same as GetAlpha/CheckAlpha.
+//
+// CONTRACT UNVERIFIED — the endpoint (PATCH /alphas/{id}, matching ACE's
+// set_alpha_properties) and body shape are mirrored from docs, not yet confirmed
+// against a live PATCH. See AlphaProperties for the specific open question
+// (top-level `description` vs `regular.description`, exact `tags` form). Confirm
+// against a live PATCH before relying on the exact key.
+func (c *Client) SetAlphaProperties(ctx context.Context, id string, props AlphaProperties) (*Alpha, error) {
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "PATCH",
+		path:   "/alphas/" + id,
+		body:   props,
+	})
+	if err != nil {
+		return nil, err
+	}
+	a, err := decodeBody[Alpha](resp.body, "alpha")
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
 // ListAlphas returns the first page of GET /users/self/alphas with the
 // supplied options. Use ListAlphasAll for an iterator over all pages.
 func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[Alpha], error) {
