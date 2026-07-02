@@ -80,8 +80,10 @@ func TestCreateSimulation_ParsesRateLimit(t *testing.T) {
 func TestValidateMultiSim_RejectsBadBatches(t *testing.T) {
 	t.Parallel()
 	mk := func(region string, delay int) brainapi.SimulationRequest {
-		return brainapi.SimulationRequest{Type: "REGULAR", Regular: "close",
-			Settings: brainapi.SimSettings{InstrumentType: "EQUITY", Region: region, Universe: "TOP3000", Delay: delay, Language: "FASTEXPR"}}
+		return brainapi.SimulationRequest{
+			Type: "REGULAR", Regular: "close",
+			Settings: brainapi.SimSettings{InstrumentType: "EQUITY", Region: region, Universe: "TOP3000", Delay: delay, Language: "FASTEXPR"},
+		}
 	}
 	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("server must NOT be hit for an invalid batch")
