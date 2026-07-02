@@ -441,7 +441,11 @@ func (d *Dataset) UnmarshalJSON(b []byte) error {
 	// Rescue the loosely-named / uncertain keys from a generic map.
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
-		return nil // stable fields already decoded; tolerate a partial rescue
+		// Deliberate fail-open (nilerr): the alias decode above already
+		// succeeded, so the stable fields are populated — the rescue pass is
+		// best-effort for uncertain consultant-only keys and must not turn a
+		// decodable payload into an error.
+		return nil //nolint:nilerr
 	}
 	if d.ValueScore == nil {
 		d.ValueScore = firstFloatPtr(m, "valueScore", "value_score", "datasetValueScore")
