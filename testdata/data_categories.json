@@ -1,0 +1,35 @@
+[
+  {
+    "id": "analyst",
+    "name": "Analyst",
+    "valueScore": 7.4,
+    "region": ["USA", "EUR", "ASI"],
+    "datasetCount": 12,
+    "fieldCount": 480,
+    "alphaCount": 1200,
+    "userCount": 340,
+    "children": [
+      {
+        "id": "analyst4",
+        "name": "Analyst Estimates",
+        "valueScore": 8.1,
+        "region": ["USA", "EUR"],
+        "datasetCount": 4,
+        "fieldCount": 160,
+        "alphaCount": 400,
+        "userCount": 90
+      }
+    ]
+  },
+  {
+    "id": "model",
+    "name": "Model",
+    "valueScore": 5.2,
+    "region": ["USA"],
+    "datasetCount": 30,
+    "fieldCount": 2100,
+    "alphaCount": 9000,
+    "userCount": 1200,
+    "children": []
+  }
+]

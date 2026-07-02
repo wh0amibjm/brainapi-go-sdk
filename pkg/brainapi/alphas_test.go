@@ -352,6 +352,72 @@ func TestAlphaProdCorrelation_LongPoll200EmptyThenTerminal(t *testing.T) {
 	}
 }
 
+func TestAlphaPowerPoolCorrelation_LongPollThenTerminal(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/qMPjAxnO/correlations/power-pool" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		n := calls.Add(1)
+		if n < 3 {
+			w.Header().Set("Retry-After", "0.05")
+			w.WriteHeader(200) // 200 + Retry-After + empty body = "still computing" (same as self/prod)
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "correlations_power_pool.json"))
+	})
+	b, err := cl.AlphaPowerPoolCorrelation(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("AlphaPowerPoolCorrelation: %v", err)
+	}
+	// Live probe (2026-07-02): shape is the selfCorrelation per-alpha form, not
+	// the prod histogram.
+	if b.Schema == nil || b.Schema.Name != "selfCorrelation" {
+		t.Errorf("schema name wrong: %+v", b.Schema)
+	}
+	if b.Max == nil || *b.Max != 0.4821 {
+		t.Errorf("max wrong: %v", b.Max)
+	}
+	if b.Min == nil || *b.Min != -0.0206 {
+		t.Errorf("min wrong: %v", b.Min)
+	}
+	if len(b.Records) != 2 {
+		t.Errorf("expected 2 per-alpha records, got %d", len(b.Records))
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 polls, got %d", calls.Load())
+	}
+}
+
+// A fresh Power-Pool account has no comparable PP alpha: records=[] and
+// max=null. The decode must succeed and leave Max nil (NOT 0) so consumers can
+// fail-open on the empty pool.
+func TestAlphaPowerPoolCorrelation_EmptyPoolNullMax(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/qMPjAxnO/correlations/power-pool" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "correlations_power_pool_empty.json"))
+	})
+	b, err := cl.AlphaPowerPoolCorrelation(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("AlphaPowerPoolCorrelation: %v", err)
+	}
+	if b.Max != nil {
+		t.Errorf("empty-pool Max must decode as nil (fail-open), got %v", *b.Max)
+	}
+	if b.Min != nil {
+		t.Errorf("empty-pool Min must decode as nil, got %v", *b.Min)
+	}
+	if len(b.Records) != 0 {
+		t.Errorf("expected 0 records on empty pool, got %d", len(b.Records))
+	}
+}
+
 func TestAlphaRecordSet_LongPollThenTerminal(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32

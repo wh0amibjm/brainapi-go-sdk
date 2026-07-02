@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`AlphaPowerPoolCorrelation` + `alphas corr-power-pool <id>`** — GET
+  `/alphas/{id}/correlations/power-pool`. Live-probe-confirmed (2026-07-02): same
+  long-poll handshake as `/correlations/self` and the SAME body shape
+  (`schema.name = "selfCorrelation"`, per-alpha records, top-level min/max — NOT
+  the prod-corr histogram), so it reuses the self-corr decode path. A fresh
+  Power-Pool account returns `records: []` with `max: null`; `PowerPoolCorrelationBlock.Max`
+  therefore decodes as nil, and consumers MUST fail-OPEN on nil (empty pool = no
+  constraint), gating on `*Max < 0.5` only when non-nil.
+- **`DataCategories` + `schema data-categories`** — GET `/data-categories`,
+  live-probed (2026-07-02) as a BARE JSON array of category descriptors carrying
+  a category-level `valueScore` (float), a `region` array, dataset/field/alpha/user
+  counts, and a `children` subcategory array. Takes no query params (global tree);
+  complements `/data-sets` (which has the per-dataset pyramid multiplier).
+
+### Changed
+- **`Themes()` / `schema themes` doc corrected to reflect the probed 404.** The
+  2026-07-02 live probe confirmed there is NO independent `/themes` endpoint (404).
+  The theme calendar is the Learn page `themes/consgrpdefault`; the API-authoritative
+  "multiplier in effect" signal is `Dataset.PyramidMultiplier` off `/data-sets`.
+  The method is retained ONLY for its already-fail-open behavior (a 404 degrades to
+  "themes unavailable"); the CLI short-help and type docs now say so.
+- **`SimSettings.ComponentActivation` doc marks it unverified.** The OPTIONS
+  `/simulations` schema (2026-07-02) does not list `componentActivation` in any
+  casing, and it is absent from a REGULAR alpha's `settings`. Its real home is
+  unconfirmed (possibly an alpha-level PATCH attribute, not a sim setting). The
+  field stays — `omitempty` means "not set => not sent" — but must not be assumed
+  honored by a SUPER sim until the first SUPER simulation verifies it.
+
 ## [0.8.0] - 2026-06-16
 
 ### Fixed

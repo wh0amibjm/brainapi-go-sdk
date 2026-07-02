@@ -139,6 +139,65 @@ func TestThemes_HappyPath(t *testing.T) {
 	}
 }
 
+func TestDataCategories_BareArray(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/data-categories" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "data_categories.json"))
+	})
+	cats, err := cl.DataCategories(context.Background())
+	if err != nil {
+		t.Fatalf("DataCategories: %v", err)
+	}
+	if len(cats) != 2 {
+		t.Fatalf("want 2 categories, got %d", len(cats))
+	}
+	first := cats[0]
+	if first.ValueScore == nil || *first.ValueScore != 7.4 {
+		t.Errorf("category valueScore not decoded: %+v", first)
+	}
+	if len(first.Region) != 3 || first.Region[0] != "USA" {
+		t.Errorf("region array not decoded: %+v", first.Region)
+	}
+	if first.DatasetCount == nil || *first.DatasetCount != 12 {
+		t.Errorf("datasetCount not decoded: %+v", first)
+	}
+	if len(first.Children) != 1 {
+		t.Fatalf("expected 1 child subcategory, got %d", len(first.Children))
+	}
+	child := first.Children[0]
+	if child.ValueScore == nil || *child.ValueScore != 8.1 {
+		t.Errorf("child valueScore not decoded: %+v", child)
+	}
+	// A category with no value score / empty children still decodes cleanly.
+	if cats[1].ValueScore == nil || *cats[1].ValueScore != 5.2 {
+		t.Errorf("second category valueScore wrong: %+v", cats[1])
+	}
+	if len(cats[1].Children) != 0 {
+		t.Errorf("second category should have no children: %+v", cats[1].Children)
+	}
+}
+
+// DataCategories accepts a {results:[...]} envelope defensively (probe shape is
+// a bare array, but BRAIN may wrap it later).
+func TestDataCategories_ResultsEnvelope(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"count":1,"results":[{"id":"x","name":"X","valueScore":1.5}]}`))
+	})
+	cats, err := cl.DataCategories(context.Background())
+	if err != nil {
+		t.Fatalf("DataCategories envelope: %v", err)
+	}
+	if len(cats) != 1 || cats[0].ValueScore == nil || *cats[0].ValueScore != 1.5 {
+		t.Errorf("envelope form not decoded: %+v", cats)
+	}
+}
+
 // Themes accepts a {results:[...]} envelope as well as a bare array.
 func TestThemes_ResultsEnvelope(t *testing.T) {
 	t.Parallel()

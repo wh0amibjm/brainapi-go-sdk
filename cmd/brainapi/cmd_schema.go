@@ -19,9 +19,20 @@ func newSchemaCmd() *cobra.Command {
 		newSchemaDataFieldsCmd(),
 		newSchemaSimulationOptionsCmd(),
 		newSchemaDatasetsCmd(),
+		newSchemaDataCategoriesCmd(),
 		newSchemaThemesCmd(),
 	)
 	return cmd
+}
+
+func newSchemaDataCategoriesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "data-categories",
+		Short: "GET /data-categories: bare-array category tree with category-level valueScore + region coverage + child subcategories (probed 2026-07-02).",
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) ([]brainapi.DataCategory, error) {
+			return cl.DataCategories(ctx)
+		}),
+	}
 }
 
 func newSchemaDatasetsCmd() *cobra.Command {
@@ -74,7 +85,7 @@ func newSchemaDatasetsCmd() *cobra.Command {
 func newSchemaThemesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "themes",
-		Short: "GET /themes: currently-announced consultant Themes + QualityFactor multipliers. Path/schema inferred — verify via live probe; degrades on 404/403.",
+		Short: "GET /themes: PROBED 404 (2026-07-02) — no such endpoint; use `schema datasets` pyramidMultiplier + Learn themes/consgrpdefault calendar. Kept fail-open.",
 		RunE: runE(func(cl *brainapi.Client, ctx context.Context) ([]brainapi.Theme, error) {
 			return cl.Themes(ctx)
 		}),

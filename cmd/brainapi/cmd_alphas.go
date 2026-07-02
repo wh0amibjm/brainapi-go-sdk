@@ -21,6 +21,7 @@ func newAlphasCmd() *cobra.Command {
 		newAlphaPnLCmd(),
 		newAlphaCorrCmd(),
 		newAlphaCorrProdCmd(),
+		newAlphaCorrPowerPoolCmd(),
 		newAlphaCorrLocalCmd(),
 		newAlphaRecordSetCmd(),
 		newAlphaRecordSetsCmd(),
@@ -140,6 +141,30 @@ func newAlphaCorrProdCmd() *cobra.Command {
 			ctx, cancel := ctxWithSignal()
 			defer cancel()
 			b, err := cl.AlphaProdCorrelation(ctx, args[0])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(b)
+			return nil
+		},
+	}
+}
+
+func newAlphaCorrPowerPoolCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "corr-power-pool <alpha-id>",
+		Short: "GET /alphas/{id}/correlations/power-pool: pre-submit Power-Pool corr check (gate on max<0.5; null max = empty pool, fail-open pass)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			b, err := cl.AlphaPowerPoolCorrelation(ctx, args[0])
 			if err != nil {
 				writeErr(err)
 				return nil

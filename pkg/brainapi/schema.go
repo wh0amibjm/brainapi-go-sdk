@@ -134,6 +134,39 @@ func (c *Client) DatasetsAll(ctx context.Context, q DataFieldsQuery) (<-chan Dat
 	})
 }
 
+// DataCategories calls GET /data-categories. Live probe (2026-07-02): the
+// response is a BARE JSON array (not the {count, results} envelope) of
+// category descriptors, each with a category-level `valueScore` (float), a
+// `region` array, `datasetCount`/`fieldCount`/`alphaCount`/`userCount` counts,
+// and a `children` array of subcategories with the same shape.
+//
+// Unlike /data-sets this endpoint takes NO query params — the category tree is
+// global, spanning every region (each node lists the regions it covers in
+// Region). It complements Datasets: /data-categories gives the coarse
+// value-score map to pick a category, /data-sets drills into the datasets under
+// it (with the pyramid multiplier).
+func (c *Client) DataCategories(ctx context.Context) ([]DataCategory, error) {
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/data-categories",
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Bare array per the live probe; accept a {results} envelope defensively in
+	// case BRAIN later wraps it.
+	if out, err := decodeBody[[]DataCategory](resp.body, "data-categories"); err == nil {
+		return *out, nil
+	}
+	env, err := decodeBody[struct {
+		Results []DataCategory `json:"results"`
+	}](resp.body, "data-categories")
+	if err != nil {
+		return nil, err
+	}
+	return env.Results, nil
+}
+
 // Themes calls GET /themes — the currently-announced consultant Themes (region
 // / dataset / delay bonuses running 1-3 weeks). Each theme carries a
 // QualityFactor multiplier; when an alpha satisfies several overlapping themes
@@ -141,12 +174,17 @@ func (c *Client) DatasetsAll(ctx context.Context, q DataFieldsQuery) (<-chan Dat
 // (themes/multiplier-rules.md). Returns a bare or {results}-wrapped array,
 // decoded flexibly.
 //
-// FAIL-OPEN: no local reference doc pins the /themes path or response schema
-// (the multiplier-rules doc describes the arithmetic, not an API). The path is
-// the most reasonable inference; on a 404/403/shape-mismatch the caller should
-// degrade gracefully (the toolkit report treats an error as "themes
-// unavailable"). Confirm path + schema via an active probe. The Theme type
-// keeps a Raw fallback so extra fields survive a decode.
+// PROBED 404 (2026-07-02): there is NO independent /themes endpoint on BRAIN —
+// the live probe returned 404. The theme CALENDAR lives as a Learn
+// documentation page (learn/documentation/themes/consgrpdefault, a weekly
+// rolling table), which has no JSON API. The authoritative API source for the
+// multiplier CURRENTLY in effect is instead the /data-sets list field
+// `pyramidMultiplier` (see Datasets / Dataset.PyramidMultiplier). This method
+// is retained ONLY for its already-fail-open semantics: on the expected 404 the
+// caller degrades to "themes unavailable" and should read pyramidMultiplier
+// off /data-sets instead. Do NOT treat a 404 here as an error condition — it is
+// the confirmed steady state. The Theme type keeps a Raw fallback so extra
+// fields survive a decode if BRAIN ever ships the endpoint.
 func (c *Client) Themes(ctx context.Context) ([]Theme, error) {
 	resp, err := c.do(ctx, doRequest{
 		method: "GET",
