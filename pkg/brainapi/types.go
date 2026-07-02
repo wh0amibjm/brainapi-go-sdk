@@ -3,6 +3,8 @@ package brainapi
 import (
 	"encoding/json"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -132,6 +134,56 @@ type Check struct {
 	// limit/value pair. Empty for the usual threshold checks.
 	Message      string          `json:"message,omitempty"`
 	Competitions json.RawMessage `json:"competitions,omitempty"`
+}
+
+// UnmarshalJSON tolerates BRAIN returning a check's limit/value as EITHER a JSON
+// number OR a string. The threshold checks (LOW_SHARPE, HIGH_TURNOVER, …) carry
+// numbers, but a few CATEGORICAL checks carry strings — verified live 2026-07-02,
+// HT_ORTHOGONAL_RAM_NEUTRALIZATION reports {"limit":"RAM","value":"Subindustry"}.
+// A number (or a numeric string) is parsed into the *float64; a non-numeric
+// string (a category label, not a threshold) leaves the pointer nil.
+//
+// Without this, a single string-typed limit/value fails the decode of the WHOLE
+// Alpha — encoding/json cannot put a string into *float64 — which breaks GET
+// /alphas/{id}, the alphas list, AND the set-properties response (all decode an
+// Alpha carrying is.checks). See parseCheckFloat.
+func (c *Check) UnmarshalJSON(b []byte) error {
+	// checkAlias drops the UnmarshalJSON method so the embedded decode does not
+	// recurse; the shallower RawMessage limit/value shadow the alias's *float64
+	// (Go's json prefers the least-nested field for a given tag), so we capture
+	// the raw scalars here and coerce them below.
+	type checkAlias Check
+	shadow := struct {
+		*checkAlias
+		Limit json.RawMessage `json:"limit"`
+		Value json.RawMessage `json:"value"`
+	}{checkAlias: (*checkAlias)(c)}
+	if err := json.Unmarshal(b, &shadow); err != nil {
+		return err
+	}
+	c.Limit = parseCheckFloat(shadow.Limit)
+	c.Value = parseCheckFloat(shadow.Value)
+	return nil
+}
+
+// parseCheckFloat coerces a raw check limit/value scalar into a *float64: a JSON
+// number or a numeric string yields the parsed value; null / absent / a
+// non-numeric string yields nil (a categorical label carries no threshold).
+func parseCheckFloat(raw json.RawMessage) *float64 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil {
+		return &f
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if pf, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return &pf
+		}
+	}
+	return nil
 }
 
 // RecordSetBlock is the {schema, records} envelope used by /recordsets/pnl,
