@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/spf13/cobra"
 
@@ -13,8 +14,18 @@ func newSchemaCmd() *cobra.Command {
 		Use:   "schema",
 		Short: "Static schema endpoints (operators, data-fields)",
 	}
-	cmd.AddCommand(newSchemaOperatorsCmd(), newSchemaDataFieldsCmd())
+	cmd.AddCommand(newSchemaOperatorsCmd(), newSchemaDataFieldsCmd(), newSchemaSimulationOptionsCmd())
 	return cmd
+}
+
+func newSchemaSimulationOptionsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "simulation-options",
+		Short: "OPTIONS /simulations: dynamic DRF metadata schema (settable fields + enum choices)",
+		RunE: runE(func(cl *brainapi.Client, ctx context.Context) (map[string]json.RawMessage, error) {
+			return cl.SimulationOptions(ctx)
+		}),
+	}
 }
 
 func newSchemaOperatorsCmd() *cobra.Command {

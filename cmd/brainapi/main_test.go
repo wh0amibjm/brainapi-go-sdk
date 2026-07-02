@@ -219,3 +219,30 @@ func TestCLI_VersionAlwaysOK(t *testing.T) {
 		t.Errorf("unexpected: %+v", env)
 	}
 }
+
+func TestResolveMaxLongPolls(t *testing.T) {
+	cases := []struct {
+		in, want int
+	}{
+		{0, defaultMaxLongPolls},  // unset → default
+		{-5, defaultMaxLongPolls}, // negative → default
+		{60, 60},                  // explicit default
+		{360, 360},                // raised for slow multi-sims
+		{1, 1},                    // any positive value is honored
+	}
+	for _, c := range cases {
+		if got := resolveMaxLongPolls(c.in); got != c.want {
+			t.Errorf("resolveMaxLongPolls(%d) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestRootCmd_MaxLongPollsFlag(t *testing.T) {
+	f := newRootCmd().PersistentFlags().Lookup("max-long-polls")
+	if f == nil {
+		t.Fatal("--max-long-polls persistent flag is not registered")
+	}
+	if f.DefValue != "60" {
+		t.Errorf("--max-long-polls default = %q, want \"60\"", f.DefValue)
+	}
+}

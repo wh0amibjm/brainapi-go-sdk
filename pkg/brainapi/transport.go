@@ -98,6 +98,17 @@ func (r *rawResponse) retryAfter() (time.Duration, bool) {
 	return parseRetryAfter(r.header.Get("Retry-After"))
 }
 
+// rateLimit reads the X-Ratelimit-* daily-quota headers off a response (present
+// on POST /simulations). Returns a zero-value RateLimit{Present:false} when the
+// server sent none.
+func (r *rawResponse) rateLimit() RateLimit {
+	return parseRateLimit(
+		r.header.Get("X-Ratelimit-Limit"),
+		r.header.Get("X-Ratelimit-Remaining"),
+		r.header.Get("X-Ratelimit-Reset"),
+	)
+}
+
 // do executes a single HTTP round-trip via tls-client. Caller is responsible
 // for retry / classification / cookie persistence — keep doRT minimal.
 func (t *tlsHTTP) do(ctx context.Context, r rawRequest) (*rawResponse, error) {
@@ -536,19 +547,29 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 		return retryIn(serverErrFloor)
 
 	case resp.status == 429:
+		// A "concurrent simulations" / "previous to finish" 429 is a TRANSIENT
+		// per-request collision on the shared submission semaphore — NOT an
+		// account-level quota exhaustion. Under multi-simulation (8 parents in
+		// flight) two POSTs racing the semaphore trip it routinely, and a single
+		// such collision must NOT globally cooldown the whole Client — that would
+		// stall the other 7 healthy parents behind one unlucky racer. So this
+		// class gets a per-request backoff-retry only. Genuine account-level
+		// limits (X-Ratelimit exhausted, edge throttle) carry no cooldown body
+		// and were never routed through setCooldown; they fall through to the
+		// same per-request backoff and surface as RateLimitError when exhausted.
 		cd := isCooldownBody(resp.body)
 		d, _ := resp.retryAfter()
 		d = clamp(d, rateLimitFloor, rateLimitCeiling)
-		if cd {
-			c.setCooldown(d)
-			c.observer.ObserveRetry(r.method, r.path, 429, st.errAttempt, RetryKindCooldown, d)
-		}
 		if st.errAttempt >= c.maxRetries {
 			return terminal(resp, &RateLimitError{Status: 429, RetryAfter: d, Cooldown: cd, URL: urlStr, Body: resp.body})
 		}
-		c.logger.Warn("rate-limited, sleeping",
+		kind := RetryKindRateLimit
+		if cd {
+			kind = RetryKindCooldown
+		}
+		c.logger.Warn("rate-limited, backing off (per-request, not global cooldown)",
 			"url", urlStr, "retry_after", d.String(), "cooldown", cd, "attempt", st.errAttempt+1)
-		c.observer.ObserveRetry(r.method, r.path, 429, st.errAttempt, RetryKindRateLimit, d)
+		c.observer.ObserveRetry(r.method, r.path, 429, st.errAttempt, kind, d)
 		st.errAttempt++
 		return retryIn(d)
 

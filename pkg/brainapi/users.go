@@ -59,6 +59,30 @@ func (c *Client) Activities(ctx context.Context, kind ActivityKind) (*ActivitySt
 	return s, nil
 }
 
+// Diversity calls GET /users/self/activities/diversity?grouping=<grouping>,
+// reporting the spread of the user's alphas across the requested grouping
+// dimension. grouping is required (BRAIN 400s without it). The body shape is
+// dynamic and not yet characterized, so it is returned as a pass-through
+// DiversityStream (raw JSON) — see the type doc.
+func (c *Client) Diversity(ctx context.Context, grouping string) (*DiversityStream, error) {
+	if err := requireNonEmpty(grouping, "grouping"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/users/self/activities/diversity",
+		query:  newQuery().set("grouping", grouping).values(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	d, err := decodeBody[DiversityStream](resp.body, "diversity")
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
 // ActivityRecord is a generic decoded row from ActivityStream.Records.records,
 // keyed by RecordSchema.Properties[*].Name. Values are kept as json.RawMessage
 // because the column types are heterogeneous (date/amount/integer/text).

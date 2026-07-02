@@ -247,6 +247,23 @@ func registerReadTools(s *mcp.Server, cl *brainapi.Client) {
 			return cl.WaitForSimulation(ctx, in.ID)
 		})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "simulations_wait_multi",
+		Description: "GET /simulations/{parent} — long-poll a multi-simulation PARENT to terminal, then resolve every child. Returns the parent + all resolved children. incomplete=true (with error) means >=1 child is still pending/unreachable and the already-resolved children are returned; re-poll for the rest.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in simIDArg) (*mcp.CallToolResult, *multiSimWaitResult, error) {
+		parent, children, err := cl.WaitForMultiSimulation(ctx, in.ID)
+		if parent == nil {
+			// Couldn't even resolve the parent — a hard failure.
+			return nil, nil, classifyErr(err)
+		}
+		out := &multiSimWaitResult{Parent: parent, Children: children}
+		if err != nil {
+			out.Incomplete = true
+			out.Error = err.Error()
+		}
+		return nil, out, nil
+	})
+
 	addTool(s, "captcha_challenge", "GET /captcha: the raw Altcha challenge JSON (used internally by register).",
 		func(ctx context.Context, _ noArgs) (string, error) {
 			b, err := cl.FetchCaptchaChallenge(ctx)
@@ -362,10 +379,22 @@ func registerWriteTools(s *mcp.Server, cl *brainapi.Client) {
 		return nil, &submitResult{Submitted: true, CorrMax: corrMax, Note: "submitted", Verdict: v}, nil
 	})
 
-	addTool(s, "simulations_create", "POST /simulations — DESTRUCTIVE: consumes simulation quota. Provide a SimulationRequest: 'type' (REGULAR|SUPER|COMBO), the alpha expression in 'regular' (or 'super'), and 'settings' (instrumentType, region, universe, delay, decay, neutralization, truncation, …). Returns the simulation id; poll it with wait_simulation.",
-		func(ctx context.Context, in brainapi.SimulationRequest) (locResult, error) {
-			loc, err := cl.CreateSimulation(ctx, in)
-			return locResult{Location: loc}, err
+	addTool(s, "simulations_create", "POST /simulations — DESTRUCTIVE: consumes simulation quota. Provide a SimulationRequest: 'type' (REGULAR|SUPER|COMBO), the alpha expression in 'regular' (or 'super'), and 'settings' (instrumentType, region, universe, delay, decay, neutralization, truncation, …). Returns the simulation id and the daily sim-quota snapshot; poll the id with wait_simulation.",
+		func(ctx context.Context, in brainapi.SimulationRequest) (simCreateResult, error) {
+			res, err := cl.CreateSimulation(ctx, in)
+			if err != nil {
+				return simCreateResult{}, err
+			}
+			return simCreateResult{ID: res.ID, RateLimit: rateLimitToOut(res.RateLimit)}, nil
+		})
+
+	addTool(s, "simulations_create_multi", "POST /simulations (ARRAY) — DESTRUCTIVE, MULTI_SIMULATION: enqueue 2..10 homogeneous simulations under one parent (each child consumes simulation quota). Requests must share type/instrumentType/region/delay/language. Returns the PARENT id + daily sim-quota snapshot; poll it with simulations_wait_multi.",
+		func(ctx context.Context, in multiSimCreateArg) (multiSimCreateResult, error) {
+			res, err := cl.CreateMultiSimulation(ctx, in.Requests)
+			if err != nil {
+				return multiSimCreateResult{}, err
+			}
+			return multiSimCreateResult{ParentID: res.ID, RateLimit: rateLimitToOut(res.RateLimit)}, nil
 		})
 
 	addTool(s, "register", "POST /users — DESTRUCTIVE: creates an account. Provide a RegisterInput: email, firstName, lastName, fullName, gender, address{country,…}, education{university, major, degree (BACHELORS|MASTERS|ASSOCIATE), graduationYear}, auxiliary{agree, password, confirmation}. The Altcha captcha is auto-solved by the SDK — leave auxiliary.captcha empty.",
@@ -412,8 +441,52 @@ type checkDecoded struct {
 	Messages []string `json:"messages"`
 }
 
-type locResult struct {
-	Location string `json:"location"`
+// rateLimitOut mirrors brainapi.RateLimit for tool output — the daily-sim quota
+// snapshot from the POST /simulations X-Ratelimit-* headers.
+type rateLimitOut struct {
+	Limit        int  `json:"limit"`
+	Remaining    int  `json:"remaining"`
+	ResetSeconds int  `json:"reset_seconds"`
+	Present      bool `json:"present"`
+}
+
+func rateLimitToOut(rl brainapi.RateLimit) rateLimitOut {
+	return rateLimitOut{
+		Limit:        rl.Limit,
+		Remaining:    rl.Remaining,
+		ResetSeconds: int(rl.Reset.Seconds()),
+		Present:      rl.Present,
+	}
+}
+
+// simCreateResult is simulations_create's output: the sim id plus the daily
+// sim-quota snapshot from the response headers.
+type simCreateResult struct {
+	ID        string       `json:"id"`
+	RateLimit rateLimitOut `json:"rate_limit"`
+}
+
+// multiSimCreateArg is the body for simulations_create_multi: a 2..10 array of
+// homogeneous SimulationRequests (same type/instrumentType/region/delay/language).
+type multiSimCreateArg struct {
+	Requests []brainapi.SimulationRequest `json:"requests" jsonschema:"2..10 homogeneous SimulationRequests (same type, instrumentType, region, delay, language)"`
+}
+
+// multiSimCreateResult is simulations_create_multi's output: the PARENT id plus
+// the daily sim-quota snapshot (each child counted against the quota).
+type multiSimCreateResult struct {
+	ParentID  string       `json:"parent_id"`
+	RateLimit rateLimitOut `json:"rate_limit"`
+}
+
+// multiSimWaitResult is simulations_wait_multi's output: the parent simulation
+// and every resolved child. Incomplete=true means ≥1 child is still pending or
+// unreachable (re-poll); the already-resolved children are still returned.
+type multiSimWaitResult struct {
+	Parent     *brainapi.Simulation   `json:"parent"`
+	Children   []*brainapi.Simulation `json:"children"`
+	Incomplete bool                   `json:"incomplete,omitempty"`
+	Error      string                 `json:"error,omitempty"`
 }
 
 type okResult struct {

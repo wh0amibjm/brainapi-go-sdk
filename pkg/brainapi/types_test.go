@@ -3,6 +3,7 @@ package brainapi
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,69 @@ func TestPnLPoint_NullValueRoundTrip(t *testing.T) {
 	}
 	if string(out) != `["2024-01-02",null]` {
 		t.Errorf("expected null re-encode, got %s", out)
+	}
+}
+
+// The new CONSULTANT-era SimSettings fields are all omitempty: a
+// SimulationRequest that predates them must still marshal to the SAME bytes it
+// did before (no stray "testPeriod":"" / "maxTrade":"" keys), preserving the
+// byte-for-byte wire contract older callers depend on.
+func TestSimSettings_NewFieldsOmitemptyRoundTrip(t *testing.T) {
+	req := SimulationRequest{
+		Type:    "REGULAR",
+		Regular: "close",
+		Settings: SimSettings{
+			InstrumentType: "EQUITY", Region: "USA", Universe: "TOP3000",
+			Delay: 1, Decay: 12, Neutralization: "SUBINDUSTRY",
+			Truncation: 0.02, Pasteurization: "ON", UnitHandling: "VERIFY",
+			NanHandling: "OFF", Language: "FASTEXPR",
+		},
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(out)
+	for _, k := range []string{"testPeriod", "maxTrade", "maxPosition", "selectionHandling", "selectionLimit", "selection", "super"} {
+		if strings.Contains(s, `"`+k+`"`) {
+			t.Errorf("omitted field %q leaked into wire form: %s", k, s)
+		}
+	}
+	// A full round-trip must reproduce the same struct.
+	var back SimulationRequest
+	if err := json.Unmarshal(out, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	out2, _ := json.Marshal(back)
+	if string(out2) != s {
+		t.Errorf("round-trip changed bytes:\n  %s\n  %s", s, out2)
+	}
+}
+
+// When the new fields ARE set they emit under their exact BRAIN key names.
+func TestSimSettings_NewFieldsEmitWhenSet(t *testing.T) {
+	req := SimulationRequest{
+		Type:      "SUPER",
+		Super:     "expr",
+		Selection: "sel_expr",
+		Settings: SimSettings{
+			InstrumentType: "EQUITY", Region: "USA", Universe: "TOP3000", Delay: 1,
+			TestPeriod: "P2Y", MaxTrade: "ON", MaxPosition: "OFF",
+			SelectionHandling: "NON_ZERO", SelectionLimit: 100,
+		},
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(out)
+	for _, want := range []string{
+		`"testPeriod":"P2Y"`, `"maxTrade":"ON"`, `"maxPosition":"OFF"`,
+		`"selectionHandling":"NON_ZERO"`, `"selectionLimit":100`, `"selection":"sel_expr"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("expected %s in %s", want, s)
+		}
 	}
 }
 

@@ -14,7 +14,37 @@ func newUsersCmd() *cobra.Command {
 		Use:   "users",
 		Short: "User profile / activity endpoints",
 	}
-	cmd.AddCommand(newUsersSelfCmd(), newUsersCompetitionsCmd(), newUsersActivitiesCmd())
+	cmd.AddCommand(newUsersSelfCmd(), newUsersCompetitionsCmd(), newUsersActivitiesCmd(), newUsersDiversityCmd())
+	return cmd
+}
+
+func newUsersDiversityCmd() *cobra.Command {
+	var grouping string
+	cmd := &cobra.Command{
+		Use:   "diversity --grouping <dim>",
+		Short: "GET /users/self/activities/diversity?grouping=...: alpha spread across a grouping dimension",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if grouping == "" {
+				writeErr(fmt.Errorf("--grouping is required"))
+				return nil
+			}
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			d, err := cl.Diversity(ctx, grouping)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(d)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&grouping, "grouping", "", "Grouping dimension (e.g. dataset, region, universe) (required)")
 	return cmd
 }
 

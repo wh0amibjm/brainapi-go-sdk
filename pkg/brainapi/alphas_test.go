@@ -287,6 +287,128 @@ func TestAlphaSelfCorrelation_LongPoll200EmptyThenTerminal(t *testing.T) {
 	}
 }
 
+func TestAlphaProdCorrelation_LongPollThenTerminal(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/qMPjAxnO/correlations/prod" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		n := calls.Add(1)
+		if n < 3 {
+			w.Header().Set("Retry-After", "0.05")
+			w.WriteHeader(503) // "still computing" (Consultant-tier signal)
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "correlations_prod.json"))
+	})
+	b, err := cl.AlphaProdCorrelation(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("AlphaProdCorrelation: %v", err)
+	}
+	if b.Max == nil || *b.Max != 0.8849 {
+		t.Errorf("max wrong: %v", b.Max)
+	}
+	if b.Min == nil || *b.Min != -0.8745 {
+		t.Errorf("min wrong: %v", b.Min)
+	}
+	if len(b.Records) != 3 {
+		t.Errorf("expected 3 histogram records, got %d", len(b.Records))
+	}
+	if b.Schema == nil || b.Schema.Name != "prodCorrelation" {
+		t.Errorf("schema name wrong: %+v", b.Schema)
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 polls, got %d", calls.Load())
+	}
+}
+
+func TestAlphaProdCorrelation_LongPoll200EmptyThenTerminal(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/qMPjAxnO/correlations/prod" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		n := calls.Add(1)
+		if n < 3 {
+			w.Header().Set("Retry-After", "0.05")
+			w.WriteHeader(200) // 200 + empty body = "still computing"
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "correlations_prod.json"))
+	})
+	b, err := cl.AlphaProdCorrelation(context.Background(), "qMPjAxnO")
+	if err != nil {
+		t.Fatalf("AlphaProdCorrelation: %v", err)
+	}
+	if b.Max == nil || *b.Max != 0.8849 {
+		t.Errorf("max wrong: %v", b.Max)
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 polls, got %d", calls.Load())
+	}
+}
+
+func TestAlphaRecordSet_LongPollThenTerminal(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/aX/recordsets/yearly-stats" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		n := calls.Add(1)
+		if n < 2 {
+			w.Header().Set("Retry-After", "0.02")
+			w.WriteHeader(200) // still-computing
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"schema":{"name":"yearly-stats","properties":[{"name":"year"},{"name":"sharpe"}]},"records":[[2023,1.5],[2024,1.7]]}`))
+	})
+	b, err := cl.AlphaRecordSet(context.Background(), "aX", "yearly-stats")
+	if err != nil {
+		t.Fatalf("AlphaRecordSet: %v", err)
+	}
+	if b.Schema == nil || b.Schema.Name != "yearly-stats" || len(b.Records) != 2 {
+		t.Errorf("recordset decode wrong: %+v", b)
+	}
+}
+
+func TestAlphaRecordSet_RequiresArgs(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("server must not be hit for empty args")
+		w.WriteHeader(500)
+	})
+	if _, err := cl.AlphaRecordSet(context.Background(), "", "x"); err == nil {
+		t.Error("empty alpha id: want error")
+	}
+	if _, err := cl.AlphaRecordSet(context.Background(), "a", ""); err == nil {
+		t.Error("empty name: want error")
+	}
+}
+
+func TestAlphaRecordSets_PassThrough(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/aX/recordsets" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`[{"name":"pnl"},{"name":"yearly-stats"}]`))
+	})
+	raw, err := cl.AlphaRecordSets(context.Background(), "aX")
+	if err != nil {
+		t.Fatalf("AlphaRecordSets: %v", err)
+	}
+	if !strings.Contains(string(raw), "yearly-stats") {
+		t.Errorf("raw pass-through wrong: %s", raw)
+	}
+}
+
 func TestAlphaPnL_Warm(t *testing.T) {
 	t.Parallel()
 	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {

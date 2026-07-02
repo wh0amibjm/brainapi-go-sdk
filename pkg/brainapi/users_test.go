@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/wh0amibjm/brainapi-go-sdk/pkg/brainapi"
@@ -99,5 +100,44 @@ func TestActivities_ListEnvelope(t *testing.T) {
 	}
 	if s.Total == nil {
 		t.Error("LIST envelope must have total")
+	}
+}
+
+func TestDiversity_PassThroughAndGroupingQuery(t *testing.T) {
+	t.Parallel()
+	var gotGrouping string
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/self/activities/diversity" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		gotGrouping = r.URL.Query().Get("grouping")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"grouping":"dataset","records":[{"dataset":"fundamental","count":12}]}`))
+	})
+	d, err := cl.Diversity(context.Background(), "dataset")
+	if err != nil {
+		t.Fatalf("Diversity: %v", err)
+	}
+	if gotGrouping != "dataset" {
+		t.Errorf("grouping query not sent, got %q", gotGrouping)
+	}
+	// Body is passed through verbatim.
+	out, err := json.Marshal(d)
+	if err != nil {
+		t.Fatalf("marshal DiversityStream: %v", err)
+	}
+	if !strings.Contains(string(out), "fundamental") {
+		t.Errorf("raw body not preserved: %s", out)
+	}
+}
+
+func TestDiversity_RequiresGrouping(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("server must not be hit without grouping")
+		w.WriteHeader(500)
+	})
+	if _, err := cl.Diversity(context.Background(), ""); err == nil {
+		t.Error("empty grouping: want error")
 	}
 }

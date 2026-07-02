@@ -260,15 +260,6 @@ func (c *Client) Cooldown() time.Duration {
 	return d
 }
 
-func (c *Client) setCooldown(d time.Duration) {
-	c.cooldownMu.Lock()
-	defer c.cooldownMu.Unlock()
-	t := time.Now().Add(d)
-	if t.After(c.cooldownUntil) {
-		c.cooldownUntil = t
-	}
-}
-
 // reserveSimSlot acquires one of MaxConcurrentSims submission slots, bounding
 // the number of concurrent POST /simulations in flight (NOT the number of
 // simulations running on BRAIN — the slot is released once the create returns,
@@ -306,6 +297,38 @@ func (c *Client) checkBudget(kind string) error {
 			return ErrDailyBudgetExhausted
 		}
 		c.budgetSubs++
+	}
+	return nil
+}
+
+// checkBudgetN reserves n budget units atomically (all-or-nothing): it returns
+// ErrDailyBudgetExhausted WITHOUT incrementing when the batch would overrun the
+// daily gate, otherwise increments by n in one step. Used by multi-simulation
+// so a partial batch can never leak k-1 units for a POST that never leaves the
+// client. n <= 1 collapses to checkBudget's single-unit semantics.
+func (c *Client) checkBudgetN(kind string, n int) error {
+	if n <= 1 {
+		return c.checkBudget(kind)
+	}
+	day := challengeDayStr(c.now())
+	c.budgetMu.Lock()
+	defer c.budgetMu.Unlock()
+	if c.budgetDay != day {
+		c.budgetDay = day
+		c.budgetSims = 0
+		c.budgetSubs = 0
+	}
+	switch kind {
+	case "sim":
+		if c.dailyBudget.Sims > 0 && c.budgetSims+n > c.dailyBudget.Sims {
+			return ErrDailyBudgetExhausted
+		}
+		c.budgetSims += n
+	case "submit":
+		if c.dailyBudget.Submits > 0 && c.budgetSubs+n > c.dailyBudget.Submits {
+			return ErrDailyBudgetExhausted
+		}
+		c.budgetSubs += n
 	}
 	return nil
 }

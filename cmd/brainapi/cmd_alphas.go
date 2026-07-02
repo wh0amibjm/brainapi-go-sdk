@@ -20,7 +20,10 @@ func newAlphasCmd() *cobra.Command {
 		newAlphaSubmitCmd(),
 		newAlphaPnLCmd(),
 		newAlphaCorrCmd(),
+		newAlphaCorrProdCmd(),
 		newAlphaCorrLocalCmd(),
+		newAlphaRecordSetCmd(),
+		newAlphaRecordSetsCmd(),
 		newAlphaListCmd(),
 		newAlphaPerformanceCmd(),
 	)
@@ -118,6 +121,78 @@ func newAlphaCorrCmd() *cobra.Command {
 				return nil
 			}
 			writeOK(b)
+			return nil
+		},
+	}
+}
+
+func newAlphaCorrProdCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "corr-prod <alpha-id>",
+		Short: "GET /alphas/{id}/correlations/prod: pre-submit prod-corr check vs all BRAIN production alphas (gate on max<0.7)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			b, err := cl.AlphaProdCorrelation(ctx, args[0])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(b)
+			return nil
+		},
+	}
+}
+
+func newAlphaRecordSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "recordset <alpha-id> <name>",
+		Short: "GET /alphas/{id}/recordsets/{name}: a named recordset (yearly-stats, etc.) as {schema, records}",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			b, err := cl.AlphaRecordSet(ctx, args[0], args[1])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(b)
+			return nil
+		},
+	}
+}
+
+func newAlphaRecordSetsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "recordsets <alpha-id>",
+		Short: "GET /alphas/{id}/recordsets: list the recordset names available for the alpha",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			raw, err := cl.AlphaRecordSets(ctx, args[0])
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(raw)
 			return nil
 		},
 	}

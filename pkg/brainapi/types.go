@@ -156,6 +156,24 @@ type SelfCorrelationBlock struct {
 	Max *float64 `json:"max,omitempty"`
 }
 
+// ProdCorrelationBlock is the body returned by GET /alphas/{id}/correlations/prod.
+// Unlike /correlations/self (whose records are per-alpha tuples), the prod-corr
+// records form a HISTOGRAM: each record is a positional tuple [binMin, binMax,
+// count] per Schema.Properties[*].Name (min, max, alphas) — the number of BRAIN
+// PRODUCTION alphas whose correlation to this alpha falls in [binMin, binMax).
+// Min/Max are the server-computed signed correlation extremes across the whole
+// production pool.
+//
+// Gate on *Max: BRAIN rejects on the SELF_CORRELATION-style prod check at
+// correlation >= 0.7 (ACE's check_prod_corr_test uses the same top-level max).
+// A trivial rank(close) alpha was observed with self-corr max 0.52 (passes) but
+// prod-corr max 0.88 (fails) — the prod gate catches twins the self gate cannot.
+type ProdCorrelationBlock struct {
+	RecordSetBlock
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+}
+
 // PerformanceStats is one side (before or after) of a BeforeAndAfterPerformance
 // comparison: the aggregate metrics the alpha would carry.
 type PerformanceStats struct {
@@ -230,25 +248,53 @@ type Verdict struct {
 	HTTP   int     `json:"http,omitempty"`
 }
 
-// Simulation is the body of GET /simulations/{id}.
+// Simulation is the body of GET /simulations/{id}. It doubles as a
+// multi-simulation PARENT (Children populated, no Alpha) and CHILD (Parent
+// populated, produces an Alpha).
 type Simulation struct {
 	ID       string          `json:"id,omitempty"`
+	Parent   string          `json:"parent,omitempty"`   // set when this sim is a multi-sim child
+	Children []string        `json:"children,omitempty"` // set when this sim is a multi-sim parent
 	Type     string          `json:"type,omitempty"`
 	Settings json.RawMessage `json:"settings,omitempty"`
 	Regular  json.RawMessage `json:"regular,omitempty"`
-	Status   string          `json:"status,omitempty"`   // COMPLETE | FAIL | ERROR | "" (still running)
-	Alpha    string          `json:"alpha,omitempty"`    // populated on COMPLETE
+	Status   string          `json:"status,omitempty"`   // WAITING|SIMULATING (running); COMPLETE|WARNING|CANCELLED|TIMEOUT|ERROR|FAIL (terminal)
+	Alpha    string          `json:"alpha,omitempty"`    // populated on COMPLETE/WARNING (single or child)
 	Message  string          `json:"message,omitempty"`  // populated on FAIL/ERROR
 	Progress *float64        `json:"progress,omitempty"` // [0..1] while running
 }
 
+// RateLimit is the daily simulation-quota snapshot parsed from the
+// X-Ratelimit-* headers of a POST /simulations response. Present is false when
+// the server did not send them. (BRAIN's CORS Access-Control-Expose-Headers
+// omits X-Ratelimit-*, so a browser fetch reads null — only the SDK/CLI can
+// see them.) Reset is the time until the quota resets (EST challenge-day).
+type RateLimit struct {
+	Limit     int           `json:"limit"`
+	Remaining int           `json:"remaining"`
+	Reset     time.Duration `json:"reset"`
+	Present   bool          `json:"present"`
+}
+
+// CreateSimulationResult is returned by CreateSimulation and
+// CreateMultiSimulation. ID is the simulation id from the Location header (the
+// PARENT id for a multi-simulation); RateLimit is the daily-quota snapshot from
+// the same response.
+type CreateSimulationResult struct {
+	ID        string    `json:"id"`
+	RateLimit RateLimit `json:"rateLimit"`
+}
+
 // SimulationRequest is the POST /simulations body.
 type SimulationRequest struct {
-	Type     string          `json:"type"` // "REGULAR" | "SUPER" | "COMBO"
-	Regular  string          `json:"regular,omitempty"`
-	Super    string          `json:"super,omitempty"`
-	Settings SimSettings     `json:"settings"`
-	Combo    json.RawMessage `json:"combo,omitempty"`
+	Type    string `json:"type"` // "REGULAR" | "SUPER" | "COMBO"
+	Regular string `json:"regular,omitempty"`
+	Super   string `json:"super,omitempty"`
+	// Selection is the SUPER-alpha selection expression (the second leg of a
+	// SUPER alpha alongside Super). omitempty so REGULAR/COMBO round-trip clean.
+	Selection string          `json:"selection,omitempty"`
+	Settings  SimSettings     `json:"settings"`
+	Combo     json.RawMessage `json:"combo,omitempty"`
 }
 
 // SimSettings captures the simulate-time knobs. Fields match BRAIN's exact
@@ -267,6 +313,26 @@ type SimSettings struct {
 	NanHandling    string  `json:"nanHandling"`
 	Language       string  `json:"language"`
 	Visualization  bool    `json:"visualization"`
+
+	// The following are CONSULTANT-era knobs, all omitempty so an existing
+	// SimulationRequest that omits them still round-trips byte-for-byte through
+	// the SDK. Enum values below are from the live OPTIONS /simulations schema
+	// (2026-07-01); the SDK does NOT hard-validate them — the server is the
+	// authority — but the exact accepted values are documented here.
+
+	// TestPeriod is an ISO-8601 duration string (e.g. "P2Y", "P6M") selecting
+	// the out-of-sample test window length. Empty = BRAIN default.
+	TestPeriod string `json:"testPeriod,omitempty"`
+	// MaxTrade ∈ {"OFF","ON"}: cap per-name trade size. Some regions
+	// (ASI/JPN/HKG/KOR/TWN) require "ON".
+	MaxTrade string `json:"maxTrade,omitempty"`
+	// MaxPosition ∈ {"OFF","ON"}: cap per-name position size.
+	MaxPosition string `json:"maxPosition,omitempty"`
+	// SelectionHandling ∈ {"POSITIVE","NON_ZERO","NON_NAN"}: how the SUPER
+	// alpha selection expression's output is interpreted.
+	SelectionHandling string `json:"selectionHandling,omitempty"`
+	// SelectionLimit is the max number of instruments the SUPER selection keeps.
+	SelectionLimit int `json:"selectionLimit,omitempty"`
 }
 
 // Operator is one item from GET /operators (bare array).
@@ -384,6 +450,34 @@ type ActivityStream struct {
 	YTD       *ActivityPeriod `json:"ytd,omitempty"`
 	Total     *ActivityPeriod `json:"total,omitempty"`
 	Records   *RecordSetBlock `json:"records,omitempty"`
+}
+
+// DiversityStream is the body of GET /users/self/activities/diversity. It is a
+// DISTINCT shape from ActivityStream (the payment/simulation/submission
+// activities envelope) — the diversity endpoint reports the spread of the
+// user's alphas across a grouping dimension (dataset, region, universe, …).
+//
+// No live shape has been captured yet, so the body is carried as raw JSON and
+// passed through untyped. When a real shape is confirmed, promote the common
+// keys to typed fields (mirroring ActivityStream) and keep a Raw fallback.
+type DiversityStream struct {
+	Raw json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON stores the whole body verbatim (pass-through until the shape is
+// characterized).
+func (d *DiversityStream) UnmarshalJSON(b []byte) error {
+	d.Raw = append(d.Raw[:0], b...)
+	return nil
+}
+
+// MarshalJSON re-emits the stored raw body so `users diversity` prints exactly
+// what BRAIN returned.
+func (d DiversityStream) MarshalJSON() ([]byte, error) {
+	if len(d.Raw) == 0 {
+		return []byte("null"), nil
+	}
+	return d.Raw, nil
 }
 
 // PnLSeries is the body of GET /alphas/{id}/recordsets/pnl.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -178,30 +179,84 @@ func TestServerError_RetriesAndSurfacesAPIError(t *testing.T) {
 	}
 }
 
-func TestCooldown_PropagatesToSubsequentCalls(t *testing.T) {
+// TestConcurrentCollision429_NoGlobalCooldown pins the P1-SDK-1 contract: a
+// "concurrent simulation / previous to finish" 429 is a TRANSIENT per-request
+// collision and must NOT put the whole Client into a global cooldown. It is
+// retried per-request and, once retries exhaust, surfaces as a RateLimitError
+// (Cooldown:true for classification) — but a SUBSEQUENT healthy call must still
+// dispatch to the network, never short-circuit with ErrCooldown.
+func TestConcurrentCollision429_NoGlobalCooldown(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
 	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		w.Header().Set("Retry-After", "0.1")
+		w.Header().Set("Retry-After", "0.01")
 		w.WriteHeader(429)
 		_, _ = w.Write([]byte(`{"detail":"concurrent simulation, please wait for previous to finish"}`))
 	})
-	// First call trips cooldown then surfaces RateLimitError once retries exhaust.
-	_, _ = cl.Self(context.Background())
-	cooldown := cl.Cooldown()
-	if cooldown <= 0 {
-		t.Errorf("expected cooldown > 0, got %s", cooldown)
-	}
-
-	// Second call should refuse immediately without a network hit.
-	preCalls := calls.Load()
+	// First call retries per-request then surfaces a RateLimitError.
 	_, err := cl.Self(context.Background())
-	if !errors.Is(err, brainapi.ErrCooldown) {
-		t.Errorf("expected ErrCooldown, got %v", err)
+	var rlErr *brainapi.RateLimitError
+	if !errors.As(err, &rlErr) {
+		t.Fatalf("expected RateLimitError, got %v", err)
 	}
-	if calls.Load() != preCalls {
-		t.Errorf("cooldown didn't block dispatch: pre=%d post=%d", preCalls, calls.Load())
+	if !rlErr.Cooldown {
+		t.Errorf("expected RateLimitError.Cooldown=true for a concurrent-collision body")
+	}
+	// The collision must NOT have armed a global cooldown.
+	if d := cl.Cooldown(); d != 0 {
+		t.Errorf("concurrent-collision 429 must not set a global cooldown, got %s", d)
+	}
+	// A subsequent call must still reach the network (not blocked by ErrCooldown).
+	preCalls := calls.Load()
+	_, err = cl.Self(context.Background())
+	if errors.Is(err, brainapi.ErrCooldown) {
+		t.Errorf("healthy call was blocked by a stale global cooldown")
+	}
+	if calls.Load() <= preCalls {
+		t.Errorf("subsequent call did not dispatch: pre=%d post=%d", preCalls, calls.Load())
+	}
+}
+
+// TestConcurrentCollision429_DoesNotStallConcurrentRequests is the regression
+// for the multi-sim scenario: one goroutine hits a persistent concurrent-
+// collision 429 while a second, independent request must complete unimpeded —
+// proving a single collision no longer freezes healthy in-flight parents.
+func TestConcurrentCollision429_DoesNotStallConcurrentRequests(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/users/self" {
+			// The "collision" endpoint: always a concurrent-collision 429.
+			w.Header().Set("Retry-After", "0.01")
+			w.WriteHeader(429)
+			_, _ = w.Write([]byte(`{"detail":"concurrent simulation, please wait for previous to finish"}`))
+			return
+		}
+		// The healthy endpoint (/operators is a bare array) must always succeed.
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Collider goroutine: exhausts retries and returns a RateLimitError.
+	go func() {
+		defer wg.Done()
+		_, _ = cl.Self(context.Background())
+	}()
+	// Healthy goroutine: a GET /operators must succeed while the collider spins.
+	var healthyErr error
+	go func() {
+		defer wg.Done()
+		_, healthyErr = cl.Operators(context.Background())
+	}()
+	wg.Wait()
+
+	if healthyErr != nil {
+		t.Fatalf("healthy concurrent request was stalled/failed by a collision: %v", healthyErr)
+	}
+	if d := cl.Cooldown(); d != 0 {
+		t.Errorf("no global cooldown should be armed, got %s", d)
 	}
 }
 
