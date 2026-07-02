@@ -2,6 +2,7 @@ package brainapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -216,6 +217,97 @@ func TestSubmitAlpha_503WithBodyKeepsPolling(t *testing.T) {
 	}
 	if v.Status != "pending_corr" {
 		t.Errorf("expected pending_corr (503+body → keep polling), got %s (reason=%s)", v.Status, v.Reason)
+	}
+}
+
+// SetAlphaProperties issues a PATCH /alphas/{id} whose body contains ONLY the
+// fields the caller set (omitempty), and parses the 200 response as *Alpha. This
+// pins both the wire shape (method, path, selective body) and the decode.
+func TestSetAlphaProperties(t *testing.T) {
+	t.Parallel()
+	var gotMethod, gotPath string
+	var gotBody []byte
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotBody = drainBodyReq(t, r)
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "alpha_detail.json"))
+	})
+	desc := strings.Repeat("Idea and rationale for this power pool alpha. ", 3) // >100 chars
+	a, err := cl.SetAlphaProperties(context.Background(), "qMPjAxnO", brainapi.AlphaProperties{
+		Description: &desc,
+		Tags:        []string{"PowerPoolSelected"},
+	})
+	if err != nil {
+		t.Fatalf("SetAlphaProperties: %v", err)
+	}
+	// (a) PATCH method + (b) path.
+	if gotMethod != http.MethodPatch {
+		t.Errorf("method = %s, want PATCH", gotMethod)
+	}
+	if gotPath != "/alphas/qMPjAxnO" {
+		t.Errorf("path = %s, want /alphas/qMPjAxnO", gotPath)
+	}
+	// (e) 200 body parsed into *Alpha.
+	if a == nil || a.ID != "qMPjAxnO" {
+		t.Errorf("response decode wrong: %+v", a)
+	}
+
+	// (b) body carries ONLY description + tags; (c) tags serialize as a JSON array;
+	// unset fields (name/color/category) must be ABSENT (omitempty).
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(gotBody, &m); err != nil {
+		t.Fatalf("body not JSON object: %v (%s)", err, gotBody)
+	}
+	if _, ok := m["description"]; !ok {
+		t.Errorf("body missing description: %s", gotBody)
+	}
+	tagsRaw, ok := m["tags"]
+	if !ok {
+		t.Fatalf("body missing tags: %s", gotBody)
+	}
+	var tags []string
+	if err := json.Unmarshal(tagsRaw, &tags); err != nil {
+		t.Fatalf("tags not a JSON array: %v (%s)", err, tagsRaw)
+	}
+	if len(tags) != 1 || tags[0] != "PowerPoolSelected" {
+		t.Errorf("tags = %v, want [PowerPoolSelected]", tags)
+	}
+	for _, unset := range []string{"name", "color", "category"} {
+		if _, present := m[unset]; present {
+			t.Errorf("unset field %q must be omitted, but body has it: %s", unset, gotBody)
+		}
+	}
+}
+
+// (d) An empty alpha id is rejected locally without hitting the server.
+func TestSetAlphaProperties_EmptyID(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("server must not be hit for empty id")
+		w.WriteHeader(500)
+	})
+	if _, err := cl.SetAlphaProperties(context.Background(), "", brainapi.AlphaProperties{}); err == nil {
+		t.Error("empty alpha id: want error")
+	}
+}
+
+// An empty AlphaProperties (nothing set) marshals to `{}` — a no-op partial
+// PATCH — with no phantom fields leaking in from zero values.
+func TestSetAlphaProperties_OmitsAllUnset(t *testing.T) {
+	t.Parallel()
+	var gotBody []byte
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotBody = drainBodyReq(t, r)
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "alpha_detail.json"))
+	})
+	if _, err := cl.SetAlphaProperties(context.Background(), "qMPjAxnO", brainapi.AlphaProperties{}); err != nil {
+		t.Fatalf("SetAlphaProperties: %v", err)
+	}
+	if strings.TrimSpace(string(gotBody)) != "{}" {
+		t.Errorf("empty props must marshal to {}, got %s", gotBody)
 	}
 }
 

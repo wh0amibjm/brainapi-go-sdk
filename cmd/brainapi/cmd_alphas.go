@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,12 +13,13 @@ import (
 func newAlphasCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "alphas",
-		Short: "Alpha endpoints (get, check, submit, pnl, corr, list)",
+		Short: "Alpha endpoints (get, check, submit, set-properties, pnl, corr, list)",
 	}
 	cmd.AddCommand(
 		newAlphaGetCmd(),
 		newAlphaCheckCmd(),
 		newAlphaSubmitCmd(),
+		newAlphaSetPropertiesCmd(),
 		newAlphaPnLCmd(),
 		newAlphaCorrCmd(),
 		newAlphaCorrProdCmd(),
@@ -101,6 +103,72 @@ func newAlphaSubmitCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newAlphaSetPropertiesCmd() *cobra.Command {
+	var description, name, color, category, tags string
+	cmd := &cobra.Command{
+		Use:   "set-properties <alpha-id>",
+		Short: "PATCH /alphas/{id}: set alpha PROPERTIES (description/name/color/category/tags). Use --description for the >=100-char Idea+Rationale a pure Power Pool alpha needs. Contract unverified — confirm the body key against a live PATCH.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var props brainapi.AlphaProperties
+			// Only thread the flags the user actually set, so an unset flag is
+			// OMITTED from the PATCH body (omitempty). Changed() distinguishes
+			// "flag not passed" from "flag passed as empty string".
+			if cmd.Flags().Changed("description") {
+				props.Description = &description
+			}
+			if cmd.Flags().Changed("name") {
+				props.Name = &name
+			}
+			if cmd.Flags().Changed("color") {
+				props.Color = &color
+			}
+			if cmd.Flags().Changed("category") {
+				props.Category = &category
+			}
+			if cmd.Flags().Changed("tags") {
+				props.Tags = splitTags(tags)
+			}
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			a, err := cl.SetAlphaProperties(ctx, args[0], props)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(a)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&description, "description", "", "Alpha description (Idea + Rationale; >=100 chars for Power Pool eligibility)")
+	cmd.Flags().StringVar(&name, "name", "", "Alpha name")
+	cmd.Flags().StringVar(&color, "color", "", "Alpha color tag")
+	cmd.Flags().StringVar(&category, "category", "", "Alpha category")
+	cmd.Flags().StringVar(&tags, "tags", "", "Comma-separated tags, e.g. PowerPoolSelected,foo (empty entries dropped)")
+	return cmd
+}
+
+// splitTags splits a comma-separated --tags value into a trimmed, non-empty
+// slice. An all-empty/blank input yields an empty (non-nil) slice, which still
+// marshals under omitempty as an absent field — but the caller only reaches here
+// when --tags was explicitly Changed(), so "set to empty" is an intentional
+// clear. Returns []string{} rather than nil for that case.
+func splitTags(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func newAlphaCorrCmd() *cobra.Command {
