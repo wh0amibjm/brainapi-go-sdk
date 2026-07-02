@@ -2,6 +2,7 @@ package brainapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -107,6 +108,29 @@ func (c *Client) CreateMultiSimulation(ctx context.Context, reqs []SimulationReq
 		return nil, err
 	}
 	return &CreateSimulationResult{ID: id, RateLimit: resp.rateLimit()}, nil
+}
+
+// SimulationOptions calls OPTIONS /simulations and returns BRAIN's Django REST
+// framework metadata schema as a top-level map of raw JSON — the dynamic
+// description of every settable simulation field and its enum choices
+// (maxTrade/maxPosition ∈ [OFF,ON], selectionHandling ∈ [POSITIVE,NON_ZERO,
+// NON_NAN], language ∈ [PYTHON,FASTEXPR], etc.). It is intentionally NOT
+// strongly typed: the schema is dynamic (region/universe/neutralization choices
+// depend on instrumentType) and BRAIN evolves it, so callers introspect the raw
+// map rather than bind to a fixed struct.
+func (c *Client) SimulationOptions(ctx context.Context) (map[string]json.RawMessage, error) {
+	resp, err := c.do(ctx, doRequest{
+		method: "OPTIONS",
+		path:   "/simulations",
+	})
+	if err != nil {
+		return nil, err
+	}
+	m, err := decodeBody[map[string]json.RawMessage](resp.body, "simulation options")
+	if err != nil {
+		return nil, err
+	}
+	return *m, nil
 }
 
 // validateMultiSimHomogeneous enforces BRAIN's multi-simulation constraints:

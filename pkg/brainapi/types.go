@@ -452,6 +452,34 @@ type ActivityStream struct {
 	Records   *RecordSetBlock `json:"records,omitempty"`
 }
 
+// DiversityStream is the body of GET /users/self/activities/diversity. It is a
+// DISTINCT shape from ActivityStream (the payment/simulation/submission
+// activities envelope) — the diversity endpoint reports the spread of the
+// user's alphas across a grouping dimension (dataset, region, universe, …).
+//
+// No live shape has been captured yet, so the body is carried as raw JSON and
+// passed through untyped. When a real shape is confirmed, promote the common
+// keys to typed fields (mirroring ActivityStream) and keep a Raw fallback.
+type DiversityStream struct {
+	Raw json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON stores the whole body verbatim (pass-through until the shape is
+// characterized).
+func (d *DiversityStream) UnmarshalJSON(b []byte) error {
+	d.Raw = append(d.Raw[:0], b...)
+	return nil
+}
+
+// MarshalJSON re-emits the stored raw body so `users diversity` prints exactly
+// what BRAIN returned.
+func (d DiversityStream) MarshalJSON() ([]byte, error) {
+	if len(d.Raw) == 0 {
+		return []byte("null"), nil
+	}
+	return d.Raw, nil
+}
+
 // PnLSeries is the body of GET /alphas/{id}/recordsets/pnl.
 type PnLSeries struct {
 	Schema  *RecordSchema `json:"schema"`

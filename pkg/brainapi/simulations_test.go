@@ -392,6 +392,27 @@ func TestReserveSimSlot_CancelWhileQueued(t *testing.T) {
 	<-done
 }
 
+func TestSimulationOptions_ReturnsRawSchemaMap(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodOptions || r.URL.Path != "/simulations" {
+			t.Errorf("wrong: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"name":"Simulation List","actions":{"POST":{"settings":{"children":{"maxTrade":{"choices":["OFF","ON"]}}}}}}`))
+	})
+	m, err := cl.SimulationOptions(context.Background())
+	if err != nil {
+		t.Fatalf("SimulationOptions: %v", err)
+	}
+	if _, ok := m["actions"]; !ok {
+		t.Errorf("expected 'actions' key in options map, got keys %v", m)
+	}
+	if !strings.Contains(string(m["actions"]), "maxTrade") {
+		t.Errorf("expected maxTrade in actions, got %s", m["actions"])
+	}
+}
+
 func TestCreateSimulation_MissingLocation(t *testing.T) {
 	t.Parallel()
 	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
