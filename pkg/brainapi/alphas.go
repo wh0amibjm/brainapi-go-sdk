@@ -430,6 +430,14 @@ func (c *Client) AlphaPowerPoolCorrelation(ctx context.Context, id string) (*Pow
 	return b, nil
 }
 
+// AlphaRegularProperties carries the REGULAR-scoped mutable properties nested
+// under the `regular` key of an AlphaProperties PATCH body. BRAIN homes the
+// alpha description HERE — {"regular":{"description":"…"}} — NOT at the top
+// level. `omitempty` keeps a nil Description out of the wire body.
+type AlphaRegularProperties struct {
+	Description *string `json:"description,omitempty"`
+}
+
 // AlphaProperties is the mutable-properties patch body for SetAlphaProperties.
 // Every field is a pointer / slice with `omitempty`, so a field left nil/empty
 // is OMITTED from the marshalled JSON entirely — the byte-for-byte "not set =>
@@ -437,25 +445,28 @@ func (c *Client) AlphaPowerPoolCorrelation(ctx context.Context, id string) (*Pow
 // partial update).
 //
 // Primary use (alpha-toolkit pure Power Pool submits): write a >=100-char
-// Description (Idea + Rationale template) into the alpha's PROPERTIES section.
-// Per BRAIN docs (getting-started-power-pool-alphas.md, "Description of the
-// Power Pool Alpha"), a Power Pool alpha WITHOUT such a description is not
-// eligible; the "PowerPoolSelected" tag likewise lives in Properties → Tags.
+// description (Idea + Rationale template) into the alpha's PROPERTIES section by
+// setting Regular.Description. Per BRAIN docs (getting-started-power-pool-alphas.md,
+// "Description of the Power Pool Alpha"), a Power Pool alpha WITHOUT such a
+// description is not eligible; the "PowerPoolSelected" tag likewise lives in
+// Properties → Tags (the top-level Tags slice here).
 //
-// CONTRACT UNVERIFIED — the exact JSON body keys are NOT yet confirmed against a
-// live PATCH /alphas/{id}. In particular it is UNCONFIRMED whether `description`
-// belongs at the TOP LEVEL (as modelled here) or nested under `regular`
-// (i.e. `regular.description`), and the exact wire form of `tags` (bare string
-// array here vs. an object list) is likewise unverified. This mirror follows the
-// ACE library `set_alpha_properties` shape (flat top-level keys) as the most
-// likely form; confirm against a live PATCH before relying on the exact key, and
-// adjust the json tags here if the probe shows the nested/`regular.` home.
+// Wire contract VERIFIED live 2026-07-02 against PATCH /alphas/{id} (alpha
+// akd9jor5, account DH52706):
+//   - description → NESTED under `regular`: {"regular":{"description":"…"}}.
+//     A TOP-LEVEL "description" is REJECTED 400 {"description":["Unexpected
+//     property."]}. Hence Description lives on AlphaRegularProperties, not here.
+//   - tags → top-level JSON string array, e.g. {"tags":["PowerPoolSelected"]}
+//     (accepted 200 and echoed back verbatim; multiple tags round-trip).
+//   - name / color / category → top-level scalars (name confirmed live; color /
+//     category share the same top-level home per GET /alphas/{id} + ACE's
+//     set_alpha_properties).
 type AlphaProperties struct {
-	Description *string  `json:"description,omitempty"`
-	Name        *string  `json:"name,omitempty"`
-	Color       *string  `json:"color,omitempty"`
-	Category    *string  `json:"category,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	Regular  *AlphaRegularProperties `json:"regular,omitempty"`
+	Name     *string                 `json:"name,omitempty"`
+	Color    *string                 `json:"color,omitempty"`
+	Category *string                 `json:"category,omitempty"`
+	Tags     []string                `json:"tags,omitempty"`
 }
 
 // SetAlphaProperties calls PATCH /alphas/{id} to update an alpha's mutable
@@ -472,11 +483,10 @@ type AlphaProperties struct {
 // Budget: this is a property EDIT, NOT a submission — it does NOT consume a
 // DailyBudget.Submits slot (no checkBudget call), same as GetAlpha/CheckAlpha.
 //
-// CONTRACT UNVERIFIED — the endpoint (PATCH /alphas/{id}, matching ACE's
-// set_alpha_properties) and body shape are mirrored from docs, not yet confirmed
-// against a live PATCH. See AlphaProperties for the specific open question
-// (top-level `description` vs `regular.description`, exact `tags` form). Confirm
-// against a live PATCH before relying on the exact key.
+// Wire contract VERIFIED live 2026-07-02 against PATCH /alphas/{id}: the
+// description is nested under `regular` (a top-level "description" is rejected
+// 400 "Unexpected property.") and tags are a top-level string array. See
+// AlphaProperties for the full probe result.
 func (c *Client) SetAlphaProperties(ctx context.Context, id string, props AlphaProperties) (*Alpha, error) {
 	if err := requireNonEmpty(id, "alpha id"); err != nil {
 		return nil, err

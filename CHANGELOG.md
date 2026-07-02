@@ -17,11 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pointer/slice `omitempty` fields so an unset field is OMITTED from the PATCH
   body (byte-for-byte "not set => not sent"); the CLI only threads flags the user
   explicitly passed. NOT a submission — does NOT consume a `DailyBudget.Submits`
-  slot. **CONTRACT UNVERIFIED**: endpoint + body keys are mirrored from the ACE
-  `set_alpha_properties` shape (flat top-level keys), NOT yet confirmed against a
-  live PATCH — in particular whether `description` is top-level or
-  `regular.description`, and the exact `tags` wire form. Confirm against a live
-  PATCH before relying on the exact key.
+  slot. **Wire contract VERIFIED live 2026-07-02** against PATCH `/alphas/{id}`:
+  `description` nests under `regular` (`{"regular":{"description":"…"}}`) — a
+  TOP-LEVEL `description` is REJECTED 400 `{"description":["Unexpected property."]}`,
+  so it lives on the new `AlphaRegularProperties`; `tags` is a top-level JSON
+  string array (`{"tags":["PowerPoolSelected"]}`, echoed back verbatim);
+  `name`/`color`/`category` are top-level scalars.
 - **`AlphaPowerPoolCorrelation` + `alphas corr-power-pool <id>`** — GET
   `/alphas/{id}/correlations/power-pool`. Live-probe-confirmed (2026-07-02): same
   long-poll handshake as `/correlations/self` and the SAME body shape
@@ -49,6 +50,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unconfirmed (possibly an alpha-level PATCH attribute, not a sim setting). The
   field stays — `omitempty` means "not set => not sent" — but must not be assumed
   honored by a SUPER sim until the first SUPER simulation verifies it.
+
+### Fixed
+- **`Check.Limit` / `Check.Value` tolerate a string scalar (no more whole-Alpha
+  decode failure).** BRAIN returns a check's `limit`/`value` as a number for
+  threshold checks but as a STRING for categorical ones — verified live
+  2026-07-02, `HT_ORTHOGONAL_RAM_NEUTRALIZATION` reports
+  `{"limit":"RAM","value":"Subindustry"}`. Because both fields were `*float64`, a
+  single string scalar failed the decode of the ENTIRE `Alpha` — so `GetAlpha`,
+  `ListAlphas`, AND the new `SetAlphaProperties` response (all decode an Alpha
+  carrying `is.checks`) errored with `cannot unmarshal string into … Check…limit
+  of type float64` for any alpha holding such a check. A new `Check.UnmarshalJSON`
+  now accepts number-or-string: a number (or numeric string) parses into the
+  `*float64`, a non-numeric category label leaves it nil.
 
 ## [0.8.0] - 2026-06-16
 

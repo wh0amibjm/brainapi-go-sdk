@@ -236,8 +236,8 @@ func TestSetAlphaProperties(t *testing.T) {
 	})
 	desc := strings.Repeat("Idea and rationale for this power pool alpha. ", 3) // >100 chars
 	a, err := cl.SetAlphaProperties(context.Background(), "qMPjAxnO", brainapi.AlphaProperties{
-		Description: &desc,
-		Tags:        []string{"PowerPoolSelected"},
+		Regular: &brainapi.AlphaRegularProperties{Description: &desc},
+		Tags:    []string{"PowerPoolSelected"},
 	})
 	if err != nil {
 		t.Fatalf("SetAlphaProperties: %v", err)
@@ -254,14 +254,29 @@ func TestSetAlphaProperties(t *testing.T) {
 		t.Errorf("response decode wrong: %+v", a)
 	}
 
-	// (b) body carries ONLY description + tags; (c) tags serialize as a JSON array;
-	// unset fields (name/color/category) must be ABSENT (omitempty).
+	// (b) body nests description under `regular` (VERIFIED live: a top-level
+	// "description" is rejected 400 "Unexpected property."); (c) tags serialize
+	// as a top-level JSON array; unset fields (name/color/category) must be
+	// ABSENT (omitempty).
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(gotBody, &m); err != nil {
 		t.Fatalf("body not JSON object: %v (%s)", err, gotBody)
 	}
-	if _, ok := m["description"]; !ok {
-		t.Errorf("body missing description: %s", gotBody)
+	if _, present := m["description"]; present {
+		t.Errorf("description must NOT be top-level (rejected 400 by BRAIN), body: %s", gotBody)
+	}
+	regularRaw, ok := m["regular"]
+	if !ok {
+		t.Fatalf("body missing regular (description home): %s", gotBody)
+	}
+	var regular struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(regularRaw, &regular); err != nil {
+		t.Fatalf("regular not an object: %v (%s)", err, regularRaw)
+	}
+	if regular.Description != desc {
+		t.Errorf("regular.description = %q, want %q", regular.Description, desc)
 	}
 	tagsRaw, ok := m["tags"]
 	if !ok {

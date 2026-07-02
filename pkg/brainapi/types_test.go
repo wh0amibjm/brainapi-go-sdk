@@ -165,3 +165,49 @@ func TestPnLSeries_GapDoesNotFailSeries(t *testing.T) {
 		t.Errorf("finite points corrupted: %v %v", pts[0].Value, pts[2].Value)
 	}
 }
+
+// BRAIN returns a check's limit/value as a number for threshold checks but as a
+// STRING for categorical ones (verified live 2026-07-02:
+// HT_ORTHOGONAL_RAM_NEUTRALIZATION → {"limit":"RAM","value":"Subindustry"}). A
+// single string scalar must NOT fail the decode of the surrounding checks array
+// (which would sink the whole Alpha / GET / list / set-properties response).
+func TestCheck_LimitValueNumberOrString(t *testing.T) {
+	body := []byte(`[
+		{"name":"LOW_SHARPE","result":"FAIL","limit":1.58,"value":-1.7},
+		{"name":"HT_ORTHOGONAL_RAM_NEUTRALIZATION","result":"WARNING","limit":"RAM","value":"Subindustry"},
+		{"name":"HT_LIQUID_TOP200_SHARPE","result":"WARNING","limit":1,"value":-1.01},
+		{"name":"SELF_CORRELATION","result":"PENDING"},
+		{"name":"NUMERIC_STRING","result":"PASS","limit":"0.75","value":"2"}
+	]`)
+	var checks []Check
+	if err := json.Unmarshal(body, &checks); err != nil {
+		t.Fatalf("string-valued limit/value must not fail the decode: %v", err)
+	}
+	if len(checks) != 5 {
+		t.Fatalf("want 5 checks, got %d", len(checks))
+	}
+	// (a) numeric limit/value parse through.
+	if checks[0].Limit == nil || *checks[0].Limit != 1.58 || checks[0].Value == nil || *checks[0].Value != -1.7 {
+		t.Errorf("LOW_SHARPE numeric parse wrong: limit=%v value=%v", checks[0].Limit, checks[0].Value)
+	}
+	// (b) a non-numeric categorical string leaves the pointers nil (no threshold),
+	// while name/result still decode.
+	if checks[1].Result != "WARNING" {
+		t.Errorf("RAM check result wrong: %q", checks[1].Result)
+	}
+	if checks[1].Limit != nil || checks[1].Value != nil {
+		t.Errorf("categorical string limit/value must be nil, got limit=%v value=%v", checks[1].Limit, checks[1].Value)
+	}
+	// (c) an integer scalar parses to float.
+	if checks[2].Limit == nil || *checks[2].Limit != 1 {
+		t.Errorf("integer limit parse wrong: %v", checks[2].Limit)
+	}
+	// (d) absent limit/value stay nil.
+	if checks[3].Limit != nil || checks[3].Value != nil {
+		t.Errorf("absent limit/value must be nil, got limit=%v value=%v", checks[3].Limit, checks[3].Value)
+	}
+	// (e) a NUMERIC string is rescued into the float (e.g. "0.75" → 0.75).
+	if checks[4].Limit == nil || *checks[4].Limit != 0.75 || checks[4].Value == nil || *checks[4].Value != 2 {
+		t.Errorf("numeric-string parse wrong: limit=%v value=%v", checks[4].Limit, checks[4].Value)
+	}
+}

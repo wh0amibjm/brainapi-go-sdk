@@ -109,7 +109,7 @@ func newAlphaSetPropertiesCmd() *cobra.Command {
 	var description, name, color, category, tags string
 	cmd := &cobra.Command{
 		Use:   "set-properties <alpha-id>",
-		Short: "PATCH /alphas/{id}: set alpha PROPERTIES (description/name/color/category/tags). Use --description for the >=100-char Idea+Rationale a pure Power Pool alpha needs. Contract unverified — confirm the body key against a live PATCH.",
+		Short: "PATCH /alphas/{id}: set alpha PROPERTIES (description/name/color/category/tags). Use --description for the >=100-char Idea+Rationale a pure Power Pool alpha needs (it lands in regular.description).",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var props brainapi.AlphaProperties
@@ -117,7 +117,9 @@ func newAlphaSetPropertiesCmd() *cobra.Command {
 			// OMITTED from the PATCH body (omitempty). Changed() distinguishes
 			// "flag not passed" from "flag passed as empty string".
 			if cmd.Flags().Changed("description") {
-				props.Description = &description
+				// Description is a REGULAR-scoped property: it nests under
+				// `regular` on the wire (a top-level "description" is rejected 400).
+				props.Regular = &brainapi.AlphaRegularProperties{Description: &description}
 			}
 			if cmd.Flags().Changed("name") {
 				props.Name = &name
