@@ -22,12 +22,13 @@ var readTools = []string{
 	"check_alpha_decoded", "self_correlation", "alpha_pnl", "performance",
 	"activities", "list_alphas", "list_alphas_all", "messages", "messages_all",
 	"data_fields", "data_fields_all", "get_simulation", "wait_simulation",
-	"captcha_challenge", "report_issue",
+	"simulations_wait_multi", "captcha_challenge", "report_issue",
 }
 
 // writeTools are mutating/scarce operations gated behind --enable-writes.
 var writeTools = []string{
-	"submit_alpha", "simulations_create", "register", "login", "logout",
+	"submit_alpha", "simulations_create", "simulations_create_multi",
+	"register", "login", "logout",
 	"email_verify", "email_reverify", "password_forgot", "password_reset",
 	"persona_complete",
 }
