@@ -35,6 +35,7 @@ func (c *Client) DataFields(ctx context.Context, q DataFieldsQuery) (*DataFields
 		set("region", q.Region).
 		set("universe", q.Universe).
 		set("delay", strconv.Itoa(q.Delay)).
+		setIfNotEmpty("dataset.id", q.Dataset).
 		setIfPositive("limit", q.Limit).
 		setIfPositive("offset", q.Offset).
 		values()

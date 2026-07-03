@@ -867,6 +867,11 @@ type DataFieldsQuery struct {
 	Delay          int    // 0 or 1
 	Limit          int
 	Offset         int
+	// Dataset narrows /data-fields to one dataset (query param `dataset.id=`).
+	// BRAIN clamps `count` at 10,000 and 400s any offset at/past it ("Invalid
+	// offset. Please use filters to narrow down the result."), so a slice whose
+	// field universe exceeds 10k MUST be drained per-dataset. Empty = no filter.
+	Dataset string
 }
 
 // RegisterInput is the high-level POST /users payload. The SDK fills in
