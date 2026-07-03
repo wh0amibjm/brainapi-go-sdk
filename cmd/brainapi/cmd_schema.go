@@ -153,6 +153,7 @@ func newSchemaDataFieldsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&q.Region, "region", q.Region, "Region (required)")
 	cmd.Flags().StringVar(&q.Universe, "universe", q.Universe, "Universe (required)")
 	cmd.Flags().IntVar(&q.Delay, "delay", q.Delay, "Delay 0 or 1 (required)")
+	cmd.Flags().StringVar(&q.Dataset, "dataset", "", "Filter to one dataset id (dataset.id=) — the escape from BRAIN's 10k offset cap")
 	cmd.Flags().IntVar(&q.Limit, "limit", 0, "Page size")
 	cmd.Flags().IntVar(&q.Offset, "offset", 0, "Pagination offset")
 	cmd.Flags().BoolVar(&all, "all", false, "Drain all pages")
