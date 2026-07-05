@@ -40,3 +40,45 @@ func (c *Client) BeforeAndAfterPerformance(ctx context.Context, competitionID, a
 	}
 	return p, nil
 }
+
+// SelfBeforeAndAfterPerformance calls
+// GET /users/self/alphas/{alphaID}/before-and-after-performance
+// and long-polls until BRAIN finishes the projection. This is the
+// consultant-era (no-competition) variant of BeforeAndAfterPerformance: the
+// alpha's impact on the user's WHOLE pool, returned per partition
+// ("EQUITY:<region>:<delay>" in PartitionName) with pool-level
+// stats.{before,after} (bookSize/pnl/long+shortCount/drawdown/turnover/
+// returns/margin/sharpe/fitness) and yearlyStats.{before,after} (schema =
+// the yearly-stats recordset). Score and Competition stay zero — the
+// endpoint carries no competition scoring (live-confirmed 2026-07-03).
+//
+// Caveat for consumers: the before and after windows can DIFFER (a candidate
+// with a longer backtest window stretches the after side), so raw aggregate
+// deltas can be polluted by the window mismatch — compare yearlyStats on
+// overlapping years instead.
+//
+// Long-poll behaviour matches BeforeAndAfterPerformance: 503 (or 200 empty
+// body) + Retry-After while computing, then 200 with the body. Returns
+// nil + ErrLongPollExceeded if it stays cold past MaxLongPolls. Free of
+// submit-budget cost.
+func (c *Client) SelfBeforeAndAfterPerformance(ctx context.Context, alphaID string) (*BeforeAndAfterPerformance, error) {
+	if err := requireNonEmpty(alphaID, "alpha id"); err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, doRequest{
+		method: "GET",
+		path:   "/users/self/alphas/" + alphaID + "/before-and-after-performance",
+		hints:  retryHints{longPoll503: true, longPoll200Empty: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.body) == 0 {
+		return nil, ErrLongPollExceeded
+	}
+	p, err := decodeBody[BeforeAndAfterPerformance](resp.body, "before-and-after-performance")
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}

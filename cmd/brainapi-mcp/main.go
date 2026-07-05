@@ -156,7 +156,7 @@ type dataFieldsArg struct {
 }
 
 type performanceArg struct {
-	CompetitionID string `json:"competition_id" jsonschema:"competition id"`
+	CompetitionID string `json:"competition_id,omitempty" jsonschema:"competition id; omit for the consultant pool variant (GET /users/self/alphas/{id}/before-and-after-performance)"`
 	AlphaID       string `json:"alpha_id" jsonschema:"alpha id"`
 }
 

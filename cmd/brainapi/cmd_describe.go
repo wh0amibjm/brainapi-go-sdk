@@ -246,7 +246,7 @@ var staticContracts = []contractSpec{
 	{
 		ID:      "before-after-performance",
 		Topic:   "alphas performance",
-		Summary: "GET /competitions/{cid}/alphas/{id}/before-and-after-performance projects submit impact after a 503-queued long-poll: {score:{before,after}, stats:{before,after}, yearlyStats:{before,after}, pnl}. Competition-scoped — caller supplies the competition id. yearlyStats.{before,after} and pnl are positional {schema,records} blocks; pnl columns are date, beforePnL, afterPnL. Free of submit-budget cost.",
+		Summary: "before-and-after-performance projects submit impact after a 503-queued long-poll: {stats:{before,after}, yearlyStats:{before,after}, pnl}. Two variants: DEFAULT (or --pool) GET /users/self/alphas/{id}/before-and-after-performance — the consultant pool impact, per partition (partitionName EQUITY:<region>:<delay>), no competition score; --competition <id> GET /competitions/{cid}/alphas/{id}/... — the legacy competition-scoped form, adds {score:{before,after}}. yearlyStats.{before,after} and pnl are positional {schema,records} blocks; pnl columns are date, beforePnL, afterPnL. CAVEAT (pool variant, live-probed 2026-07-03): before/after windows can DIFFER — compare yearlyStats on overlapping years, not the raw aggregates. Free of submit-budget cost.",
 		Ref:     "docs/protocol.md",
 	},
 	{
