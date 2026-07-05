@@ -352,13 +352,14 @@ func newAlphaPnLCmd() *cobra.Command {
 
 func newAlphaPerformanceCmd() *cobra.Command {
 	var competition string
+	var pool bool
 	cmd := &cobra.Command{
-		Use:   "performance <alpha-id> --competition <id>",
-		Short: "GET /competitions/{cid}/alphas/{id}/before-and-after-performance: projected submit impact (competition score + stats, before vs after)",
+		Use:   "performance <alpha-id> [--pool | --competition <id>]",
+		Short: "GET .../before-and-after-performance: projected submit impact, before vs after. Default (or --pool): the consultant pool variant under /users/self (per-partition pool stats, no competition score); --competition <id>: the legacy competition-scoped variant",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if competition == "" {
-				writeErr(fmt.Errorf("--competition is required (e.g. IQC2026S2)"))
+			if pool && competition != "" {
+				writeErr(fmt.Errorf("--pool and --competition are mutually exclusive"))
 				return nil
 			}
 			cl, err := newClient(cmd)
@@ -368,7 +369,12 @@ func newAlphaPerformanceCmd() *cobra.Command {
 			}
 			ctx, cancel := ctxWithSignal()
 			defer cancel()
-			p, err := cl.BeforeAndAfterPerformance(ctx, competition, args[0])
+			var p *brainapi.BeforeAndAfterPerformance
+			if competition != "" {
+				p, err = cl.BeforeAndAfterPerformance(ctx, competition, args[0])
+			} else {
+				p, err = cl.SelfBeforeAndAfterPerformance(ctx, args[0])
+			}
 			if err != nil {
 				writeErr(err)
 				return nil
@@ -377,7 +383,8 @@ func newAlphaPerformanceCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&competition, "competition", "", "Competition id the alpha would be submitted to, e.g. IQC2026S2 (required)")
+	cmd.Flags().StringVar(&competition, "competition", "", "Competition id the alpha would be submitted to, e.g. IQC2026S2 (legacy competition-scoped variant)")
+	cmd.Flags().BoolVar(&pool, "pool", false, "Explicitly select the consultant pool variant (GET /users/self/alphas/{id}/before-and-after-performance) — also the default when --competition is omitted")
 	return cmd
 }
 

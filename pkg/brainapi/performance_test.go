@@ -63,3 +63,50 @@ func TestBeforeAndAfterPerformance_RequiresIDs(t *testing.T) {
 		t.Error("expected error for empty alpha id")
 	}
 }
+
+func TestSelfBeforeAndAfterPerformance(t *testing.T) {
+	t.Parallel()
+	var gotPath string
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(200)
+		_, _ = w.Write(loadFixture(t, "self_before_and_after_performance.json"))
+	})
+
+	p, err := cl.SelfBeforeAndAfterPerformance(context.Background(), "O0pjMExq")
+	if err != nil {
+		t.Fatalf("SelfBeforeAndAfterPerformance: %v", err)
+	}
+
+	if want := "/users/self/alphas/O0pjMExq/before-and-after-performance"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if p.PartitionName != "EQUITY:USA:1" {
+		t.Errorf("partitionName = %q, want EQUITY:USA:1", p.PartitionName)
+	}
+	// The pool variant carries no competition score — Score stays zero.
+	if p.Score.Before != 0 || p.Score.After != 0 {
+		t.Errorf("score = %+v, want zero (pool variant has no score)", p.Score)
+	}
+	if p.Stats.Before.Sharpe != 4.65 || p.Stats.After.Sharpe != 0.88 {
+		t.Errorf("stats sharpe before=%v after=%v", p.Stats.Before.Sharpe, p.Stats.After.Sharpe)
+	}
+	// Windows can differ (the live-probe caveat): before 2 years, after 3.
+	if len(p.YearlyStats.Before.Records) != 2 || len(p.YearlyStats.After.Records) != 3 {
+		t.Errorf("yearly records before=%d after=%d, want 2/3",
+			len(p.YearlyStats.Before.Records), len(p.YearlyStats.After.Records))
+	}
+	if p.Competition != nil {
+		t.Errorf("competition = %s, want absent", p.Competition)
+	}
+}
+
+func TestSelfBeforeAndAfterPerformance_RequiresID(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("server must not be hit when the alpha id is empty")
+	})
+	if _, err := cl.SelfBeforeAndAfterPerformance(context.Background(), ""); err == nil {
+		t.Error("expected error for empty alpha id")
+	}
+}

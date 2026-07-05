@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`SelfBeforeAndAfterPerformance` + `alphas performance <id> [--pool]`** — GET
+  `/users/self/alphas/{id}/before-and-after-performance`, the consultant-era
+  (no-competition) pool variant of the Performance Comparison projection
+  (**live-confirmed 2026-07-03**, alpha O0pjMExq). Same 503-queued long-poll
+  handshake and the same body shape as the competition form MINUS
+  `score`/`competition`/`team`: per-partition (`partitionName` =
+  `EQUITY:<region>:<delay>`) pool-level `stats.{before,after}`
+  (bookSize/pnl/long+shortCount/drawdown/turnover/returns/margin/sharpe/fitness)
+  and `yearlyStats.{before,after}` (schema = the yearly-stats recordset), so it
+  reuses `BeforeAndAfterPerformance`'s decode type (Score stays zero). CLI:
+  `--competition` is no longer required — bare `alphas performance <id>` (or
+  explicit `--pool`) hits the pool variant; `--competition <id>` keeps the
+  legacy competition-scoped form; passing both is an error. MCP `performance`
+  tool: `competition_id` is now optional (omit = pool variant). **Consumer
+  caveat (live-probed)**: the before/after windows can DIFFER — a candidate
+  with a longer backtest window stretches the `after` side, polluting raw
+  aggregate deltas (a 4.65→0.88 pool sharpe "collapse" was window skew, not
+  signal) — compare `yearlyStats` on overlapping years.
 - **`SetAlphaProperties` + `alphas set-properties <id>`** — PATCH `/alphas/{id}`
   to set an alpha's mutable PROPERTIES (`description`, `name`, `color`,
   `category`, `tags`). Feeds the pure Power Pool submit flow: a Power Pool alpha
