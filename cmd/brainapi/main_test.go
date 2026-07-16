@@ -123,6 +123,46 @@ func TestCLI_SchemaOperators(t *testing.T) {
 	}
 }
 
+func TestCLI_SetPropertiesSuperDescriptions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping CLI integration test in short mode (go build is slow)")
+	}
+	bin := buildBinary(t)
+	var body map[string]struct {
+		Description string `json:"description"`
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/alphas/QPVEedzK" {
+			t.Errorf("request = %s %s, want PATCH /alphas/QPVEedzK", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode PATCH body: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(loadFixtureCLI(t, "alpha_super_detail.json"))
+	}))
+	defer srv.Close()
+
+	selection := "Select differentiated active alphas using the supplied metadata filter."
+	combo := "Combine all selected alphas using the supplied weighting expression."
+	stdout, _, code := runCLI(t, bin, []string{"BRAINAPI_BASE_URL=" + srv.URL},
+		"alphas", "set-properties", "QPVEedzK",
+		"--selection-description", selection,
+		"--combo-description", combo)
+	if code != 0 {
+		t.Fatalf("exit %d, stdout=%s", code, stdout)
+	}
+	if body["selection"].Description != selection {
+		t.Errorf("selection.description = %q, want %q", body["selection"].Description, selection)
+	}
+	if body["combo"].Description != combo {
+		t.Errorf("combo.description = %q, want %q", body["combo"].Description, combo)
+	}
+	if _, present := body["regular"]; present {
+		t.Errorf("unset regular description must be omitted, body=%+v", body)
+	}
+}
+
 func TestCLI_ErrorExitCode(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping CLI integration test in short mode")

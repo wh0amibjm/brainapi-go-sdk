@@ -430,13 +430,16 @@ func (c *Client) AlphaPowerPoolCorrelation(ctx context.Context, id string) (*Pow
 	return b, nil
 }
 
-// AlphaRegularProperties carries the REGULAR-scoped mutable properties nested
-// under the `regular` key of an AlphaProperties PATCH body. BRAIN homes the
-// alpha description HERE — {"regular":{"description":"…"}} — NOT at the top
-// level. `omitempty` keeps a nil Description out of the wire body.
-type AlphaRegularProperties struct {
+// AlphaExpressionProperties carries the mutable description nested under one
+// expression leg (`regular`, `selection`, or `combo`) of an AlphaProperties
+// PATCH body. `omitempty` keeps a nil Description out of the wire body.
+type AlphaExpressionProperties struct {
 	Description *string `json:"description,omitempty"`
 }
+
+// AlphaRegularProperties is retained as a source-compatible name for callers
+// that only set a REGULAR / Power Pool description.
+type AlphaRegularProperties = AlphaExpressionProperties
 
 // AlphaProperties is the mutable-properties patch body for SetAlphaProperties.
 // Every field is a pointer / slice with `omitempty`, so a field left nil/empty
@@ -444,49 +447,49 @@ type AlphaRegularProperties struct {
 // not sent" contract. Callers set only what they want to change (PATCH is a
 // partial update).
 //
-// Primary use (alpha-toolkit pure Power Pool submits): write a >=100-char
-// description (Idea + Rationale template) into the alpha's PROPERTIES section by
-// setting Regular.Description. Per BRAIN docs (getting-started-power-pool-alphas.md,
-// "Description of the Power Pool Alpha"), a Power Pool alpha WITHOUT such a
-// description is not eligible; the "PowerPoolSelected" tag likewise lives in
-// Properties → Tags (the top-level Tags slice here).
+// Primary uses: (1) write a >=100-char Power Pool rationale via
+// Regular.Description; (2) write the two >=100-char SuperAlpha descriptions via
+// Selection.Description and Combo.Description. The "PowerPoolSelected" tag
+// likewise lives in Properties → Tags (the top-level Tags slice here).
 //
-// Wire contract VERIFIED live 2026-07-02 against PATCH /alphas/{id} (alpha
-// akd9jor5, account DH52706):
+// Wire contract VERIFIED live against PATCH /alphas/{id} (account DH52706):
 //   - description → NESTED under `regular`: {"regular":{"description":"…"}}.
 //     A TOP-LEVEL "description" is REJECTED 400 {"description":["Unexpected
 //     property."]}. Hence Description lives on AlphaRegularProperties, not here.
+//   - SuperAlpha descriptions → NESTED under their expression legs:
+//     {"selection":{"description":"…"},"combo":{"description":"…"}}.
+//     Accepted and echoed by BRAIN on 2026-07-16 (alpha QPVEedzK); the next
+//     /check changed SUPER_SUBMISSION from FAIL to PASS and removed both
+//     *_DESCRIPTION_LENGTH failures.
 //   - tags → top-level JSON string array, e.g. {"tags":["PowerPoolSelected"]}
 //     (accepted 200 and echoed back verbatim; multiple tags round-trip).
 //   - name / color / category → top-level scalars (name confirmed live; color /
 //     category share the same top-level home per GET /alphas/{id} + ACE's
 //     set_alpha_properties).
 type AlphaProperties struct {
-	Regular  *AlphaRegularProperties `json:"regular,omitempty"`
-	Name     *string                 `json:"name,omitempty"`
-	Color    *string                 `json:"color,omitempty"`
-	Category *string                 `json:"category,omitempty"`
-	Tags     []string                `json:"tags,omitempty"`
+	Regular   *AlphaExpressionProperties `json:"regular,omitempty"`
+	Combo     *AlphaExpressionProperties `json:"combo,omitempty"`
+	Selection *AlphaExpressionProperties `json:"selection,omitempty"`
+	Name      *string                    `json:"name,omitempty"`
+	Color     *string                    `json:"color,omitempty"`
+	Category  *string                    `json:"category,omitempty"`
+	Tags      []string                   `json:"tags,omitempty"`
 }
 
 // SetAlphaProperties calls PATCH /alphas/{id} to update an alpha's mutable
-// PROPERTIES (description, name, color, category, tags) and returns the updated
-// alpha record parsed from the 200 body. Only the non-nil/non-empty fields of
-// props are sent (see AlphaProperties — omitempty gives the "not set => not
-// sent" byte-for-byte contract).
+// PROPERTIES (regular/selection/combo descriptions, name, color, category, tags)
+// and returns the updated alpha record parsed from the 200 body. Only the
+// non-nil/non-empty fields of props are sent (see AlphaProperties — omitempty
+// gives the "not set => not sent" byte-for-byte contract).
 //
-// This is the write path the pure Power Pool submit flow needs: a Power Pool
-// alpha is not eligible until a >=100-char Idea+Rationale description is present
-// in its Properties section (BRAIN docs: getting-started-power-pool-alphas.md
-// L54-73), and the "PowerPoolSelected" tag lives there too.
+// This is the write path both pure Power Pool and SuperAlpha submit flows need:
+// Power Pool requires Regular.Description, while SuperAlpha requires both
+// Selection.Description and Combo.Description (>=100 chars each).
 //
 // Budget: this is a property EDIT, NOT a submission — it does NOT consume a
 // DailyBudget.Submits slot (no checkBudget call), same as GetAlpha/CheckAlpha.
 //
-// Wire contract VERIFIED live 2026-07-02 against PATCH /alphas/{id}: the
-// description is nested under `regular` (a top-level "description" is rejected
-// 400 "Unexpected property.") and tags are a top-level string array. See
-// AlphaProperties for the full probe result.
+// See AlphaProperties for the live-verified wire homes of each property.
 func (c *Client) SetAlphaProperties(ctx context.Context, id string, props AlphaProperties) (*Alpha, error) {
 	if err := requireNonEmpty(id, "alpha id"); err != nil {
 		return nil, err

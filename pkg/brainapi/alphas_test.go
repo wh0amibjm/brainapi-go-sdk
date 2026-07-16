@@ -33,6 +33,36 @@ func TestGetAlpha(t *testing.T) {
 	}
 }
 
+func TestGetSuperAlphaPreservesExpressionLegs(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/alphas/QPVEedzK" {
+			t.Errorf("wrong path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(loadFixture(t, "alpha_super_detail.json"))
+	})
+	a, err := cl.GetAlpha(context.Background(), "QPVEedzK")
+	if err != nil {
+		t.Fatalf("GetAlpha: %v", err)
+	}
+	for leg, raw := range map[string]json.RawMessage{
+		"selection": a.Selection,
+		"combo":     a.Combo,
+	} {
+		var expression struct {
+			Code        string `json:"code"`
+			Description string `json:"description"`
+		}
+		if err := json.Unmarshal(raw, &expression); err != nil {
+			t.Fatalf("decode %s: %v (%s)", leg, err, raw)
+		}
+		if expression.Code == "" || len(expression.Description) < 100 {
+			t.Errorf("%s expression not preserved: %+v", leg, expression)
+		}
+	}
+}
+
 func TestCheckAlpha_LongPollThenTerminal(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -74,6 +104,30 @@ func TestCheckAlpha_LongPollThenTerminal(t *testing.T) {
 	}
 	if !sawWarning {
 		t.Error("expected a WARNING check in the fixture")
+	}
+}
+
+func TestCheckSuperAlphaDescriptionsPass(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(loadFixture(t, "check_super_descriptions_terminal.json"))
+	})
+	is, err := cl.CheckAlpha(context.Background(), "QPVEedzK")
+	if err != nil {
+		t.Fatalf("CheckAlpha: %v", err)
+	}
+	var superSubmissionPass bool
+	for _, check := range is.Checks {
+		if strings.HasSuffix(check.Name, "DESCRIPTION_LENGTH") {
+			t.Errorf("post-PATCH description failure still present: %+v", check)
+		}
+		if check.Name == "SUPER_SUBMISSION" && check.Result == "PASS" {
+			superSubmissionPass = true
+		}
+	}
+	if !superSubmissionPass {
+		t.Errorf("SUPER_SUBMISSION PASS missing from %+v", is.Checks)
 	}
 }
 
@@ -235,9 +289,13 @@ func TestSetAlphaProperties(t *testing.T) {
 		_, _ = w.Write(loadFixture(t, "alpha_detail.json"))
 	})
 	desc := strings.Repeat("Idea and rationale for this power pool alpha. ", 3) // >100 chars
+	selectionDesc := strings.Repeat("Select differentiated active alphas. ", 4)
+	comboDesc := strings.Repeat("Combine every selected alpha with equal weight. ", 3)
 	a, err := cl.SetAlphaProperties(context.Background(), "qMPjAxnO", brainapi.AlphaProperties{
-		Regular: &brainapi.AlphaRegularProperties{Description: &desc},
-		Tags:    []string{"PowerPoolSelected"},
+		Regular:   &brainapi.AlphaRegularProperties{Description: &desc},
+		Selection: &brainapi.AlphaExpressionProperties{Description: &selectionDesc},
+		Combo:     &brainapi.AlphaExpressionProperties{Description: &comboDesc},
+		Tags:      []string{"PowerPoolSelected"},
 	})
 	if err != nil {
 		t.Fatalf("SetAlphaProperties: %v", err)
@@ -277,6 +335,24 @@ func TestSetAlphaProperties(t *testing.T) {
 	}
 	if regular.Description != desc {
 		t.Errorf("regular.description = %q, want %q", regular.Description, desc)
+	}
+	for leg, want := range map[string]string{
+		"selection": selectionDesc,
+		"combo":     comboDesc,
+	} {
+		raw, ok := m[leg]
+		if !ok {
+			t.Fatalf("body missing %s description: %s", leg, gotBody)
+		}
+		var got struct {
+			Description string `json:"description"`
+		}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("%s not an object: %v (%s)", leg, err, raw)
+		}
+		if got.Description != want {
+			t.Errorf("%s.description = %q, want %q", leg, got.Description, want)
+		}
 	}
 	tagsRaw, ok := m["tags"]
 	if !ok {

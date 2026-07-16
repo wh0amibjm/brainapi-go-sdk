@@ -106,10 +106,10 @@ func newAlphaSubmitCmd() *cobra.Command {
 }
 
 func newAlphaSetPropertiesCmd() *cobra.Command {
-	var description, name, color, category, tags string
+	var description, selectionDescription, comboDescription, name, color, category, tags string
 	cmd := &cobra.Command{
 		Use:   "set-properties <alpha-id>",
-		Short: "PATCH /alphas/{id}: set alpha PROPERTIES (description/name/color/category/tags). Use --description for the >=100-char Idea+Rationale a pure Power Pool alpha needs (it lands in regular.description).",
+		Short: "PATCH /alphas/{id}: set alpha PROPERTIES, including regular/selection/combo descriptions.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var props brainapi.AlphaProperties
@@ -120,6 +120,12 @@ func newAlphaSetPropertiesCmd() *cobra.Command {
 				// Description is a REGULAR-scoped property: it nests under
 				// `regular` on the wire (a top-level "description" is rejected 400).
 				props.Regular = &brainapi.AlphaRegularProperties{Description: &description}
+			}
+			if cmd.Flags().Changed("selection-description") {
+				props.Selection = &brainapi.AlphaExpressionProperties{Description: &selectionDescription}
+			}
+			if cmd.Flags().Changed("combo-description") {
+				props.Combo = &brainapi.AlphaExpressionProperties{Description: &comboDescription}
 			}
 			if cmd.Flags().Changed("name") {
 				props.Name = &name
@@ -150,6 +156,8 @@ func newAlphaSetPropertiesCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&description, "description", "", "Alpha description (Idea + Rationale; >=100 chars for Power Pool eligibility)")
+	cmd.Flags().StringVar(&selectionDescription, "selection-description", "", "SuperAlpha Selection description (>=100 chars, in English)")
+	cmd.Flags().StringVar(&comboDescription, "combo-description", "", "SuperAlpha Combo description (>=100 chars, in English)")
 	cmd.Flags().StringVar(&name, "name", "", "Alpha name")
 	cmd.Flags().StringVar(&color, "color", "", "Alpha color tag")
 	cmd.Flags().StringVar(&category, "category", "", "Alpha category")

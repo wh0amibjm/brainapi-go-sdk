@@ -24,6 +24,7 @@ Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-Dev
 | GET | `/users/self/activities/{kind}` | `Client.Activities` |
 | GET | `/users/self/messages` | `Client.Messages` / `MessagesAll` |
 | GET | `/alphas/{id}` | `Client.GetAlpha` |
+| PATCH | `/alphas/{id}` | `Client.SetAlphaProperties` |
 | GET | `/alphas/{id}/check` | `Client.CheckAlpha` |
 | POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
 | GET | `/alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` |
@@ -56,6 +57,30 @@ BRAIN sends `"5.0"`, not `"5"`. `strconv.Atoi` errors out and drops the hint sil
 ### `POST /alphas/{id}/check` is **dead** (returns 405)
 
 Migrated to GET-only some time before 2026-05-05. The TS code silently swallowed the 405 in an except branch and `/check` had been a no-op for months. The SDK uses GET only.
+
+### `PATCH /alphas/{id}` descriptions are nested by expression leg
+
+Descriptions are not top-level alpha properties. The PATCH body nests each one
+under the expression leg it documents:
+
+```json
+{
+  "regular": {"description": "Power Pool Idea + Rationale..."},
+  "selection": {"description": "Why these component alphas are selected..."},
+  "combo": {"description": "How the selected alphas are combined..."}
+}
+```
+
+The `regular` form was live-verified 2026-07-02; a top-level `description` is
+rejected with HTTP 400 `Unexpected property`. The `selection` + `combo` form was
+live-verified 2026-07-16 on SuperAlpha `QPVEedzK`: PATCH returned 200 and echoed
+both descriptions; the subsequent `/check` changed `SUPER_SUBMISSION` to PASS
+and removed `COMBO_DESCRIPTION_LENGTH` / `SELECTION_DESCRIPTION_LENGTH` failures.
+The descriptions must each be at least 100 characters for SuperAlpha submission.
+See [`alpha_super_detail.json`](../testdata/alpha_super_detail.json) for the
+captured PATCH/GET response shape and
+[`check_super_descriptions_terminal.json`](../testdata/check_super_descriptions_terminal.json)
+for the post-PATCH check.
 
 ### `POST /alphas/{id}/submit` returns 503 to mean "queued"
 

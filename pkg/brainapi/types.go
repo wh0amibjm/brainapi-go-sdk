@@ -72,6 +72,8 @@ type Alpha struct {
 	Author          string           `json:"author,omitempty"`
 	Settings        json.RawMessage  `json:"settings,omitempty"`
 	Regular         json.RawMessage  `json:"regular,omitempty"`
+	Combo           json.RawMessage  `json:"combo,omitempty"`
+	Selection       json.RawMessage  `json:"selection,omitempty"`
 	DateCreated     string           `json:"dateCreated,omitempty"`
 	DateSubmitted   *string          `json:"dateSubmitted,omitempty"`
 	DateModified    string           `json:"dateModified,omitempty"`

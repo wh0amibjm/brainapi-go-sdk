@@ -201,8 +201,9 @@ Every documented BRAIN endpoint is wrapped 1:1 as both a library method and a CL
 | `GET /authentication` | `Client.Probe` | `auth probe` | [secondary](testdata/auth_get_secondary.json) / [401 no-creds](testdata/auth_401_no_creds.json) |
 | `DELETE /authentication` | `Client.Logout` | `auth logout` | _(204, no body)_ |
 | `POST /authentication/persona` | `Client.CompletePersona` | _(dead-code safety net)_ | — |
-| `GET /alphas/{id}` | `Client.GetAlpha` | `alphas get` | [alpha](testdata/alpha_detail.json) |
-| `GET /alphas/{id}/check` | `Client.CheckAlpha` | `alphas check` | [terminal](testdata/check_alpha_terminal.json) |
+| `GET /alphas/{id}` | `Client.GetAlpha` | `alphas get` | [regular alpha](testdata/alpha_detail.json) / [SuperAlpha](testdata/alpha_super_detail.json) |
+| `PATCH /alphas/{id}` | `Client.SetAlphaProperties` | `alphas set-properties` | [SuperAlpha with descriptions](testdata/alpha_super_detail.json) |
+| `GET /alphas/{id}/check` | `Client.CheckAlpha` | `alphas check` | [regular terminal](testdata/check_alpha_terminal.json) / [SuperAlpha descriptions pass](testdata/check_super_descriptions_terminal.json) |
 | `POST + GET /alphas/{id}/submit` | `Client.SubmitAlpha` | `alphas submit` | [200 pending](testdata/submit_200_pending.json) / [403 corr-fail](testdata/submit_403_corr_fail.json) |
 | `GET /alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` | `alphas pnl` | [pnl](testdata/recordsets_pnl.json) |
 | `GET /competitions/{cid}/alphas/{id}/before-and-after-performance` | `Client.BeforeAndAfterPerformance` | `alphas performance --competition <cid>` | [perf](testdata/before_and_after_performance.json) |

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SuperAlpha Selection/Combo descriptions through `SetAlphaProperties`.**
+  `AlphaProperties` now carries `Selection.Description` and `Combo.Description`,
+  and `alphas set-properties` exposes `--selection-description` /
+  `--combo-description`. Live-verified 2026-07-16: PATCH `/alphas/QPVEedzK`
+  accepted `{"selection":{"description":"…"},"combo":{"description":"…"}}`,
+  echoed both values, and the following `/check` changed `SUPER_SUBMISSION` to
+  PASS with no `*_DESCRIPTION_LENGTH` failures. `Alpha` now preserves the
+  `selection` and `combo` response blocks as raw JSON.
 - **`SelfBeforeAndAfterPerformance` + `alphas performance <id> [--pool]`** — GET
   `/users/self/alphas/{id}/before-and-after-performance`, the consultant-era
   (no-competition) pool variant of the Performance Comparison projection
