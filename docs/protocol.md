@@ -2,7 +2,19 @@
 
 These are the BRAIN HTTP behaviors that the SDK's transport / parsers depend on. They are captured — via Chrome DevTools auditing against `platform.worldquantbrain.com` — and pinned by the response fixtures in [`testdata/`](../testdata). If anything here disagrees with a fresh live capture, the capture wins.
 
-Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-DevTools-verified against `platform.worldquantbrain.com` (current as of 2026-08-23).
+Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-DevTools-verified against `platform.worldquantbrain.com` (current as of 2026-08-24).
+
+## Request representation
+
+The current platform frontend sends API reads with:
+
+```http
+Accept: application/json;version=2.0
+```
+
+The SDK mirrors that version-negotiated representation. The server was still
+backward-compatible with a generic JSON Accept header when probed on 2026-08-24,
+but the frontend header is authoritative for new protocol work.
 
 ## Endpoints used
 

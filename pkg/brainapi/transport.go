@@ -611,7 +611,10 @@ func (c *Client) evaluate(ctx context.Context, r doRequest, urlStr string, resp 
 func buildHeaders(r doRequest, hasBody bool) []hdrPair {
 	headers := make([]hdrPair, 0, 8+len(r.headers))
 	if !r.noJSON {
-		headers = append(headers, hdrPair{"accept", "application/json, text/plain, */*"})
+		// Match the current platform frontend's version-negotiated API contract.
+		// The server remains backward-compatible with a generic JSON Accept header;
+		// using the frontend's v2 representation prevents silent protocol drift.
+		headers = append(headers, hdrPair{"accept", "application/json;version=2.0"})
 	}
 	if hasBody && !r.noJSON {
 		headers = append(headers, hdrPair{"content-type", "application/json"})

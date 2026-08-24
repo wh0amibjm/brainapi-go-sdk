@@ -45,6 +45,20 @@ func TestClientGetters(t *testing.T) {
 	}
 }
 
+func TestRequestsUseVersionedJSONAccept(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Header.Get("Accept"), "application/json;version=2.0"; got != want {
+			t.Errorf("Accept=%q, want %q", got, want)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(loadFixture(t, "users_self.json"))
+	})
+	if _, err := cl.Self(context.Background()); err != nil {
+		t.Fatalf("Self: %v", err)
+	}
+}
+
 func TestParseProfile(t *testing.T) {
 	t.Parallel()
 	// gocritic flags whitespace in map keys; build the trim-test case at runtime.
