@@ -509,6 +509,38 @@ func (c *Client) SetAlphaProperties(ctx context.Context, id string, props AlphaP
 	return a, nil
 }
 
+const MaxOsmosisPoints = 100000
+
+// SetAlphaOsmosisPoints sets (points != nil) or clears (points == nil) one
+// alpha's Osmosis allocation. The dedicated method deliberately keeps the
+// three-state PATCH contract out of AlphaProperties: omitted means "do not
+// touch", while this endpoint always sends osmosisPoints and represents clear
+// as an explicit JSON null.
+func (c *Client) SetAlphaOsmosisPoints(ctx context.Context, id string, points *int) (*Alpha, error) {
+	if err := requireNonEmpty(id, "alpha id"); err != nil {
+		return nil, err
+	}
+	if points != nil && (*points < 1 || *points > MaxOsmosisPoints) {
+		return nil, fmt.Errorf("osmosis points must be an integer from 1 to %d", MaxOsmosisPoints)
+	}
+	body := struct {
+		OsmosisPoints *int `json:"osmosisPoints"`
+	}{OsmosisPoints: points}
+	resp, err := c.do(ctx, doRequest{
+		method: "PATCH",
+		path:   "/alphas/" + id,
+		body:   body,
+	})
+	if err != nil {
+		return nil, err
+	}
+	a, err := decodeBody[Alpha](resp.body, "alpha")
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
 // ListAlphas returns the first page of GET /users/self/alphas with the
 // supplied options. Use ListAlphasAll for an iterator over all pages.
 func (c *Client) ListAlphas(ctx context.Context, opts ListAlphasOptions) (*Page[Alpha], error) {

@@ -13,13 +13,14 @@ import (
 func newAlphasCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "alphas",
-		Short: "Alpha endpoints (get, check, submit, set-properties, pnl, corr, list)",
+		Short: "Alpha endpoints (get, check, submit, properties, Osmosis, pnl, corr, list)",
 	}
 	cmd.AddCommand(
 		newAlphaGetCmd(),
 		newAlphaCheckCmd(),
 		newAlphaSubmitCmd(),
 		newAlphaSetPropertiesCmd(),
+		newAlphaSetOsmosisPointsCmd(),
 		newAlphaPnLCmd(),
 		newAlphaCorrCmd(),
 		newAlphaCorrProdCmd(),
@@ -30,6 +31,46 @@ func newAlphasCmd() *cobra.Command {
 		newAlphaListCmd(),
 		newAlphaPerformanceCmd(),
 	)
+	return cmd
+}
+
+func newAlphaSetOsmosisPointsCmd() *cobra.Command {
+	var points int
+	var clear bool
+	cmd := &cobra.Command{
+		Use:   "set-osmosis-points <alpha-id>",
+		Short: "PATCH /alphas/{id}: set or clear one alpha's Osmosis allocation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pointsSet := cmd.Flags().Changed("points")
+			if pointsSet == clear {
+				return fmt.Errorf("pass exactly one of --points or --clear")
+			}
+			var value *int
+			if pointsSet {
+				if points < 1 || points > brainapi.MaxOsmosisPoints {
+					return fmt.Errorf("--points must be an integer from 1 to %d", brainapi.MaxOsmosisPoints)
+				}
+				value = &points
+			}
+			cl, err := newClient(cmd)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			ctx, cancel := ctxWithSignal()
+			defer cancel()
+			a, err := cl.SetAlphaOsmosisPoints(ctx, args[0], value)
+			if err != nil {
+				writeErr(err)
+				return nil
+			}
+			writeOK(a)
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&points, "points", 0, "Osmosis points (integer 1..100000)")
+	cmd.Flags().BoolVar(&clear, "clear", false, "clear the allocation (send JSON null)")
 	return cmd
 }
 

@@ -402,6 +402,49 @@ func TestSetAlphaProperties_OmitsAllUnset(t *testing.T) {
 	}
 }
 
+func TestSetAlphaOsmosisPoints_SetAndClear(t *testing.T) {
+	t.Parallel()
+	var bodies [][]byte
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/alphas/qMPjAxnO" {
+			t.Errorf("request = %s %s, want PATCH /alphas/qMPjAxnO", r.Method, r.URL.Path)
+		}
+		bodies = append(bodies, drainBodyReq(t, r))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(loadFixture(t, "alpha_osmosis_detail.json"))
+	})
+	points := 10000
+	a, err := cl.SetAlphaOsmosisPoints(context.Background(), "qMPjAxnO", &points)
+	if err != nil {
+		t.Fatalf("set Osmosis points: %v", err)
+	}
+	if a.OsmosisPoints == nil || *a.OsmosisPoints != 10000 {
+		t.Fatalf("decoded Osmosis points = %v, want 10000", a.OsmosisPoints)
+	}
+	if _, err := cl.SetAlphaOsmosisPoints(context.Background(), "qMPjAxnO", nil); err != nil {
+		t.Fatalf("clear Osmosis points: %v", err)
+	}
+	if got := strings.TrimSpace(string(bodies[0])); got != `{"osmosisPoints":10000}` {
+		t.Errorf("set body = %s", got)
+	}
+	if got := strings.TrimSpace(string(bodies[1])); got != `{"osmosisPoints":null}` {
+		t.Errorf("clear body = %s", got)
+	}
+}
+
+func TestSetAlphaOsmosisPoints_RejectsRangeLocally(t *testing.T) {
+	t.Parallel()
+	_, cl := newTestServerAndClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("server must not be hit for invalid Osmosis points")
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	for _, points := range []int{0, 100001} {
+		if _, err := cl.SetAlphaOsmosisPoints(context.Background(), "qMPjAxnO", &points); err == nil {
+			t.Errorf("points=%d: want validation error", points)
+		}
+	}
+}
+
 func TestAlphaSelfCorrelation_LongPollThenTerminal(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32

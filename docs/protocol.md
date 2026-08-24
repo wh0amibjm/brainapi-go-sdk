@@ -2,7 +2,7 @@
 
 These are the BRAIN HTTP behaviors that the SDK's transport / parsers depend on. They are captured — via Chrome DevTools auditing against `platform.worldquantbrain.com` — and pinned by the response fixtures in [`testdata/`](../testdata). If anything here disagrees with a fresh live capture, the capture wins.
 
-Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-DevTools-verified against `platform.worldquantbrain.com` (current as of 2026-05-06).
+Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-DevTools-verified against `platform.worldquantbrain.com` (current as of 2026-08-23).
 
 ## Endpoints used
 
@@ -24,7 +24,7 @@ Source of truth: the response fixtures in [`testdata/`](../testdata), Chrome-Dev
 | GET | `/users/self/activities/{kind}` | `Client.Activities` |
 | GET | `/users/self/messages` | `Client.Messages` / `MessagesAll` |
 | GET | `/alphas/{id}` | `Client.GetAlpha` |
-| PATCH | `/alphas/{id}` | `Client.SetAlphaProperties` |
+| PATCH | `/alphas/{id}` | `Client.SetAlphaProperties` / `Client.SetAlphaOsmosisPoints` |
 | GET | `/alphas/{id}/check` | `Client.CheckAlpha` |
 | POST + GET | `/alphas/{id}/submit` | `Client.SubmitAlpha` |
 | GET | `/alphas/{id}/recordsets/pnl` | `Client.AlphaPnL` |
@@ -81,6 +81,22 @@ See [`alpha_super_detail.json`](../testdata/alpha_super_detail.json) for the
 captured PATCH/GET response shape and
 [`check_super_descriptions_terminal.json`](../testdata/check_super_descriptions_terminal.json)
 for the post-PATCH check.
+
+### Osmosis allocation is the top-level `osmosisPoints` property
+
+Consultant Osmosis allocation uses the same `PATCH /alphas/{id}` endpoint but a
+dedicated top-level property. Setting an allocation sends
+`{"osmosisPoints":10000}`; clearing it must send an explicit JSON null,
+`{"osmosisPoints":null}`. Omitting the property means “leave unchanged”, so the
+SDK exposes this through `Client.SetAlphaOsmosisPoints` rather than adding an
+ambiguous `omitempty` field to `AlphaProperties`.
+
+The accepted range observed in the platform is an integer from 1 through
+100,000. A subsequent `GET /alphas/{id}` echoes the allocation on the Alpha as
+`osmosisPoints`; see
+[`alpha_osmosis_detail.json`](../testdata/alpha_osmosis_detail.json), captured
+2026-08-23 from ACTIVE USA/D1 Alpha `RRpjnGO1` after a successful 10,000-point
+allocation.
 
 ### `POST /alphas/{id}/submit` returns 503 to mean "queued"
 

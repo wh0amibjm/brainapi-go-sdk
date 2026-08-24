@@ -67,22 +67,25 @@ type User struct {
 // Alpha mirrors the body of GET /alphas/{id} and the items in
 // GET /users/self/alphas results[].
 type Alpha struct {
-	ID              string           `json:"id"`
-	Type            string           `json:"type"`
-	Author          string           `json:"author,omitempty"`
-	Settings        json.RawMessage  `json:"settings,omitempty"`
-	Regular         json.RawMessage  `json:"regular,omitempty"`
-	Combo           json.RawMessage  `json:"combo,omitempty"`
-	Selection       json.RawMessage  `json:"selection,omitempty"`
-	DateCreated     string           `json:"dateCreated,omitempty"`
-	DateSubmitted   *string          `json:"dateSubmitted,omitempty"`
-	DateModified    string           `json:"dateModified,omitempty"`
-	Name            *string          `json:"name,omitempty"`
-	Favorite        bool             `json:"favorite,omitempty"`
-	Hidden          bool             `json:"hidden,omitempty"`
-	Color           json.RawMessage  `json:"color,omitempty"`
-	Category        json.RawMessage  `json:"category,omitempty"`
-	Tags            []string         `json:"tags,omitempty"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	Author        string          `json:"author,omitempty"`
+	Settings      json.RawMessage `json:"settings,omitempty"`
+	Regular       json.RawMessage `json:"regular,omitempty"`
+	Combo         json.RawMessage `json:"combo,omitempty"`
+	Selection     json.RawMessage `json:"selection,omitempty"`
+	DateCreated   string          `json:"dateCreated,omitempty"`
+	DateSubmitted *string         `json:"dateSubmitted,omitempty"`
+	DateModified  string          `json:"dateModified,omitempty"`
+	Name          *string         `json:"name,omitempty"`
+	Favorite      bool            `json:"favorite,omitempty"`
+	Hidden        bool            `json:"hidden,omitempty"`
+	Color         json.RawMessage `json:"color,omitempty"`
+	Category      json.RawMessage `json:"category,omitempty"`
+	Tags          []string        `json:"tags,omitempty"`
+	// OsmosisPoints is the consultant Osmosis allocation for this alpha.
+	// Nil covers both an absent field and the API's explicit JSON null (unallocated).
+	OsmosisPoints   *int             `json:"osmosisPoints,omitempty"`
 	Classifications []Classification `json:"classifications,omitempty"`
 	Grade           string           `json:"grade,omitempty"`
 	Stage           string           `json:"stage,omitempty"`
